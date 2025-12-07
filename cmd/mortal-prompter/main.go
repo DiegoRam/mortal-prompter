@@ -3,11 +3,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/fatih/color"
 	"github.com/minimalart/mortal-prompter/internal/config"
+	"github.com/minimalart/mortal-prompter/internal/logger"
+	"github.com/minimalart/mortal-prompter/internal/orchestrator"
+	"github.com/minimalart/mortal-prompter/internal/reporter"
 	"github.com/spf13/cobra"
 )
 
@@ -69,13 +75,58 @@ Example usage:
 			// Print banner and start
 			printBanner()
 
-			// TODO: Phase 2+ - Initialize and run orchestrator
-			infoColor.Printf("Initial prompt: %s\n", cfg.Prompt)
-			infoColor.Printf("Working directory: %s\n", cfg.WorkDir)
-			infoColor.Printf("Max iterations: %d\n", cfg.MaxIterations)
+			// Initialize logger
+			log, err := logger.New(cfg.OutputDir, cfg.Verbose)
+			if err != nil {
+				return fmt.Errorf("failed to initialize logger: %w", err)
+			}
+			defer log.Close()
 
+			// Setup context with cancellation for graceful shutdown
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Handle interrupt signals
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+			go func() {
+				<-sigChan
+				log.Info("Received interrupt signal, shutting down...")
+				cancel()
+			}()
+
+			// Log session start
+			log.Info(fmt.Sprintf("Initial prompt: %s", cfg.Prompt))
+			log.Info(fmt.Sprintf("Working directory: %s", cfg.WorkDir))
+			log.Info(fmt.Sprintf("Max iterations: %d", cfg.MaxIterations))
 			fmt.Println()
-			color.New(color.FgHiYellow).Println("Orchestrator implementation coming in Phase 2...")
+
+			// Initialize and run orchestrator
+			orch := orchestrator.New(cfg, log)
+			result, err := orch.Run(ctx)
+
+			if err != nil {
+				return err
+			}
+
+			// Generate battle report
+			rep := reporter.New(cfg.OutputDir)
+			reportPath, reportErr := rep.GenerateReport(result, cfg.Prompt)
+			if reportErr != nil {
+				log.Error(fmt.Errorf("failed to generate report: %w", reportErr))
+			}
+
+			// Print summary
+			if result.Success {
+				successColor.Printf("\nSession completed successfully in %d round(s)\n", result.TotalRounds)
+			} else {
+				infoColor.Printf("\nSession ended after %d round(s)\n", result.TotalRounds)
+			}
+
+			infoColor.Printf("Log file: %s\n", log.GetLogFilePath())
+			if reportErr == nil {
+				infoColor.Printf("Report: %s\n", reportPath)
+			}
 
 			return nil
 		},

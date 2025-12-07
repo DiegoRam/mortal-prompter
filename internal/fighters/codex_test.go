@@ -65,35 +65,12 @@ func TestCodex_ImplementsFighter(t *testing.T) {
 func TestCodex_buildReviewPrompt(t *testing.T) {
 	codex := NewCodex("/tmp", 5*time.Minute)
 
-	gitDiff := `diff --git a/main.go b/main.go
-index 1234567..abcdefg 100644
---- a/main.go
-+++ b/main.go
-@@ -1,5 +1,6 @@
- package main
-
-+import "fmt"
-+
- func main() {
-+    fmt.Println("Hello")
- }`
-
-	result := codex.buildReviewPrompt(gitDiff)
+	result := codex.buildReviewPrompt()
 
 	// Verify the prompt contains expected elements
 	expectedContents := []string{
-		"code reviewer senior",
-		"GIT DIFF:",
-		gitDiff,
 		"LGTM: No issues found",
 		"ISSUE:",
-		"Bugs o errores logicos",
-		"Vulnerabilidades de seguridad",
-		"Malas practicas",
-		"Codigo duplicado",
-		"Falta de manejo de errores",
-		"Problemas de performance",
-		"Violaciones de convenciones de Go",
 	}
 
 	for _, expected := range expectedContents {

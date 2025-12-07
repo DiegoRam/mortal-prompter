@@ -40,22 +40,19 @@ func (c *Codex) Name() string {
 }
 
 // Review executes Codex to review a git diff and returns the parsed review result.
-// It builds a review prompt with the diff, executes the codex CLI, and parses the output.
+// It uses `codex review --uncommitted` command.
 func (c *Codex) Review(ctx context.Context, gitDiff string) (*types.ReviewResult, error) {
 	// Check if codex is installed
 	if _, err := exec.LookPath("codex"); err != nil {
 		return nil, fmt.Errorf("codex CLI not found in PATH: %w", err)
 	}
 
-	// Build the review prompt
-	prompt := c.buildReviewPrompt(gitDiff)
-
 	// Create context with timeout if not already set
 	execCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	// Build and execute the command
-	cmd := exec.CommandContext(execCtx, "codex", "-p", prompt)
+	// Build and execute the command using `codex review --uncommitted`
+	cmd := exec.CommandContext(execCtx, "codex", "review", "--uncommitted")
 	cmd.Dir = c.workDir
 
 	var stdout, stderr bytes.Buffer
@@ -88,30 +85,9 @@ func (c *Codex) Review(ctx context.Context, gitDiff string) (*types.ReviewResult
 	return c.parseReviewOutput(combinedOutput), nil
 }
 
-// buildReviewPrompt constructs the review prompt for Codex with the git diff.
-func (c *Codex) buildReviewPrompt(gitDiff string) string {
-	return fmt.Sprintf(`Actua como un code reviewer senior extremadamente exigente.
-
-Revisa el siguiente diff de git y encuentra TODOS los problemas:
-- Bugs o errores logicos
-- Vulnerabilidades de seguridad
-- Malas practicas
-- Codigo duplicado
-- Falta de manejo de errores
-- Problemas de performance
-- Violaciones de convenciones de Go
-
-GIT DIFF:
-%sdifffence
-%s
-%sdifffence
-
-INSTRUCCIONES DE RESPUESTA:
-- Si NO encuentras issues, responde EXACTAMENTE: "LGTM: No issues found"
-- Si encuentras issues, lista cada uno en formato:
-  ISSUE: [descripcion del problema]
-
-Se conciso y especifico. No incluyas sugerencias opcionales, solo problemas reales.`, "```", gitDiff, "```")
+// buildReviewPrompt constructs the review instructions for Codex (kept for testing).
+func (c *Codex) buildReviewPrompt() string {
+	return `Find real issues: bugs, vulnerabilities, bad practices, missing error handling. If NO issues respond "LGTM: No issues found". If issues found, list each as "ISSUE: [description]".`
 }
 
 // parseReviewOutput parses the raw output from Codex to extract review results.

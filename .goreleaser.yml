@@ -1,0 +1,68 @@
+project_name: mortal-prompter
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: mortal-prompter
+    main: ./cmd/mortal-prompter
+    binary: mortal-prompter
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.BuildTime={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+
+brews:
+  - name: mortal-prompter
+    repository:
+      owner: minimalart
+      name: homebrew-tap
+    homepage: "https://github.com/minimalart/mortal-prompter"
+    description: "CLI that orchestrates code review battles between Claude Code and Codex"
+    license: "MIT"
+    install: |
+      bin.install "mortal-prompter"
+    test: |
+      system "#{bin}/mortal-prompter", "--version"
+
+release:
+  github:
+    owner: minimalart
+    name: mortal-prompter
+  draft: false
+  prerelease: auto
