@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // View renders the current view
@@ -73,108 +75,176 @@ func (m Model) viewPrompt() string {
 
 // viewBattle renders the battle view
 func (m Model) viewBattle() string {
-	// All lines are exactly 62 characters wide (60 content + 2 borders)
+	// Styles
+	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00")).Bold(true)
+	fighterStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Bold(true)
+	activeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Bold(true)
+	waitingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
+	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF"))
+	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
+
+	var sb strings.Builder
+
+	// Box width (display characters, not bytes)
 	const W = 60
-	var lines []string
 
-	border := strings.Repeat("=", W)
+	// Helper to pad a line to width W (between ║ borders)
+	padLine := func(content string, contentWidth int) string {
+		pad := max(0, W-contentWidth)
+		return "║" + content + strings.Repeat(" ", pad) + "║\n"
+	}
 
-	lines = append(lines, "+"+border+"+")
-	lines = append(lines, "|"+centerText("M O R T A L   P R O M P T E R", W)+"|")
-	lines = append(lines, "|"+centerText(fmt.Sprintf("ROUND %d", m.currentRound), W)+"|")
-	lines = append(lines, "+"+border+"+")
+	// Header
+	topBorder := "╔" + strings.Repeat("═", W) + "╗"
+	sb.WriteString(titleStyle.Render(topBorder) + "\n")
 
-	// Fighter names and status
-	claudeStatus := "WAITING"
-	codexStatus := "WAITING"
+	title := "M O R T A L   P R O M P T E R"
+	titlePad := (W - len(title)) / 2
+	titleLine := strings.Repeat(" ", titlePad) + title + strings.Repeat(" ", W-titlePad-len(title))
+	sb.WriteString(titleStyle.Render("║"+titleLine+"║") + "\n")
+
+	roundText := fmt.Sprintf("ROUND %d", m.currentRound)
+	roundPad := (W - len(roundText)) / 2
+	roundLine := strings.Repeat(" ", roundPad) + roundText + strings.Repeat(" ", W-roundPad-len(roundText))
+	sb.WriteString(titleStyle.Render("║"+roundLine+"║") + "\n")
+
+	midBorder := "╠" + strings.Repeat("═", W) + "╣"
+	sb.WriteString(titleStyle.Render(midBorder) + "\n")
+
+	// Fighter status text (plain, for width calculation)
+	claudeStatusText := "WAITING"
+	codexStatusText := "WAITING"
 
 	switch m.claudeState {
 	case FighterActive:
-		claudeStatus = "FIGHTING"
+		claudeStatusText = "FIGHTING"
 	case FighterFinished:
-		claudeStatus = "DONE"
+		claudeStatusText = "DONE"
 	}
 
 	switch m.codexState {
 	case FighterActive:
-		codexStatus = "FIGHTING"
+		codexStatusText = "FIGHTING"
 	case FighterFinished:
-		codexStatus = "DONE"
+		codexStatusText = "DONE"
 	}
 
-	// Fighter line: "CLAUDE CODE          VS          CODEX"
-	fighterLine := fmt.Sprintf("%-20s VS %20s", "CLAUDE CODE", "CODEX")
-	lines = append(lines, "|"+centerText(fighterLine, W)+"|")
+	// Build fighter display with proper spacing
+	// Layout: ║ CLAUDE CODE         VS         CODEX              ║
+	// We have W=60 chars inside the box
+	// Left section: 25 chars, VS: 4 chars (with spaces), Right section: 25 chars, padding: 6
+	const colWidth = 25
 
-	// Health bars
-	barLine := fmt.Sprintf("%-20s    %20s", "[##########]", "[##########]")
-	lines = append(lines, "|"+centerText(barLine, W)+"|")
+	// Fighter names line
+	claudeNamePlain := "CLAUDE CODE"
+	codexNamePlain := "CODEX"
+	claudeNameStyled := fighterStyle.Render(claudeNamePlain)
+	codexNameStyled := fighterStyle.Render(codexNamePlain)
+
+	line1 := " " + claudeNameStyled + strings.Repeat(" ", colWidth-1-len(claudeNamePlain)) +
+		"VS" +
+		strings.Repeat(" ", colWidth-len(codexNamePlain)) + codexNameStyled +
+		strings.Repeat(" ", W-2*colWidth-2-1)
+	sb.WriteString("║" + line1 + "║\n")
+
+	// Health bars line
+	barPlain := "[##########]"
+	barStyled := activeStyle.Render(barPlain)
+	line2 := " " + barStyled + strings.Repeat(" ", colWidth-1-len(barPlain)) +
+		"  " +
+		strings.Repeat(" ", colWidth-len(barPlain)) + barStyled +
+		strings.Repeat(" ", W-2*colWidth-2-1)
+	sb.WriteString("║" + line2 + "║\n")
 
 	// Status line
-	statusLine := fmt.Sprintf("%-20s    %20s", claudeStatus, codexStatus)
-	lines = append(lines, "|"+centerText(statusLine, W)+"|")
+	var claudeStatusStyled, codexStatusStyled string
+	switch m.claudeState {
+	case FighterActive:
+		claudeStatusStyled = activeStyle.Render(claudeStatusText)
+	case FighterFinished:
+		claudeStatusStyled = infoStyle.Render(claudeStatusText)
+	default:
+		claudeStatusStyled = waitingStyle.Render(claudeStatusText)
+	}
 
-	lines = append(lines, "+"+border+"+")
+	switch m.codexState {
+	case FighterActive:
+		codexStatusStyled = activeStyle.Render(codexStatusText)
+	case FighterFinished:
+		codexStatusStyled = infoStyle.Render(codexStatusText)
+	default:
+		codexStatusStyled = waitingStyle.Render(codexStatusText)
+	}
+
+	line3 := " " + claudeStatusStyled + strings.Repeat(" ", colWidth-1-len(claudeStatusText)) +
+		"  " +
+		strings.Repeat(" ", colWidth-len(codexStatusText)) + codexStatusStyled +
+		strings.Repeat(" ", W-2*colWidth-2-1)
+	sb.WriteString("║" + line3 + "║\n")
+
+	sb.WriteString(midBorder + "\n")
 
 	// Round history
 	for _, round := range m.rounds {
-		var icon string
+		var icon, status string
+		var style lipgloss.Style
+
 		switch round.Status {
 		case "completed":
 			if len(round.Issues) > 0 {
 				icon = "!"
+				style = warningStyle
 			} else {
 				icon = "+"
+				style = activeStyle
 			}
 		case "in_progress":
 			icon = "*"
+			style = infoStyle
 		default:
 			icon = "x"
+			style = warningStyle
 		}
 
-		content := fmt.Sprintf("%s Round %d: %s", icon, round.Number, round.Status)
+		status = round.Status
 		if len(round.Issues) > 0 {
-			content += fmt.Sprintf(" (%d issues)", len(round.Issues))
+			status += fmt.Sprintf(" (%d issues)", len(round.Issues))
 		}
 		if round.Duration > 0 {
-			content += fmt.Sprintf(" [%s]", round.Duration.Round(time.Second))
+			status += fmt.Sprintf(" [%s]", round.Duration.Round(time.Second))
 		}
 
-		lines = append(lines, "|"+padRight(" "+content, W)+"|")
+		content := fmt.Sprintf(" %s Round %d: %s", icon, round.Number, status)
+		contentWidth := len(content)
+		styledContent := " " + style.Render(fmt.Sprintf("%s Round %d: %s", icon, round.Number, status))
+		sb.WriteString(padLine(styledContent, contentWidth))
 	}
 
 	// Current action
 	if m.currentAction != "" {
-		action := "  > " + m.currentAction
-		if len(action) > W-1 {
-			action = action[:W-4] + "..."
+		actionText := m.currentAction
+		if len(actionText) > W-8 {
+			actionText = actionText[:W-11] + "..."
 		}
-		lines = append(lines, "|"+padRight(action, W)+"|")
+		content := "  > " + actionText
+		contentWidth := len(content)
+		styledContent := "  " + infoStyle.Render("> "+actionText)
+		sb.WriteString(padLine(styledContent, contentWidth))
 	}
 
-	lines = append(lines, "+"+border+"+")
-	lines = append(lines, "|"+padRight(" d: details | q: abort | ?: help", W)+"|")
-	lines = append(lines, "+"+border+"+")
+	sb.WriteString(midBorder + "\n")
 
-	return strings.Join(lines, "\n") + "\n"
+	// Help line
+	helpText := " d: details | q: abort | ?: help"
+	helpWidth := len(helpText)
+	sb.WriteString(padLine(helpText, helpWidth))
+
+	bottomBorder := "╚" + strings.Repeat("═", W) + "╝"
+	sb.WriteString(bottomBorder + "\n")
+
+	return sb.String()
 }
 
-// centerText centers text within a given width
-func centerText(s string, width int) string {
-	if len(s) >= width {
-		return s[:width]
-	}
-	padding := (width - len(s)) / 2
-	return strings.Repeat(" ", padding) + s + strings.Repeat(" ", width-padding-len(s))
-}
-
-// padRight pads a string to the right to reach the specified width
-func padRight(s string, width int) string {
-	if len(s) >= width {
-		return s[:width]
-	}
-	return s + strings.Repeat(" ", width-len(s))
-}
 
 // viewResults renders the results view
 func (m Model) viewResults() string {

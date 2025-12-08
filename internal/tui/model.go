@@ -163,6 +163,13 @@ func (m *Model) SetBattleStarted(prompt string) {
 	m.prompt = prompt
 	m.battleStarted = true
 	m.view = ViewBattle
+	// Explicitly reset fighter states to WAITING
+	m.claudeState = FighterIdle
+	m.codexState = FighterIdle
+	m.currentRound = 0
+	m.currentAction = ""
+	m.rounds = make([]RoundDisplay, 0)
+	m.startTime = time.Now()
 }
 
 // SetReportPath sets the report path for display in results
