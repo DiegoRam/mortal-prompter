@@ -29,7 +29,7 @@ case $OS in
 esac
 
 # Get latest version
-REPO="minimalart/mortal-prompter"
+REPO="diegoram/mortal-prompter"
 LATEST_VERSION=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
 if [ -z "$LATEST_VERSION" ]; then

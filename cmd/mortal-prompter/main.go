@@ -12,12 +12,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
-	"github.com/minimalart/mortal-prompter/internal/config"
-	"github.com/minimalart/mortal-prompter/internal/logger"
-	"github.com/minimalart/mortal-prompter/internal/orchestrator"
-	"github.com/minimalart/mortal-prompter/internal/reporter"
-	"github.com/minimalart/mortal-prompter/internal/tui"
-	"github.com/minimalart/mortal-prompter/pkg/types"
+	"github.com/diegoram/mortal-prompter/internal/config"
+	"github.com/diegoram/mortal-prompter/internal/logger"
+	"github.com/diegoram/mortal-prompter/internal/orchestrator"
+	"github.com/diegoram/mortal-prompter/internal/reporter"
+	"github.com/diegoram/mortal-prompter/internal/tui"
+	"github.com/diegoram/mortal-prompter/pkg/types"
 	"github.com/spf13/cobra"
 )
 

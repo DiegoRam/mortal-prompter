@@ -438,7 +438,7 @@ Your choice: _
 
 ```go
 // go.mod
-module github.com/minimalart/mortal-prompter
+module github.com/diegoram/mortal-prompter
 
 go 1.21
 
@@ -565,9 +565,9 @@ changelog:
 brews:
   - name: mortal-prompter
     repository:
-      owner: minimalart
+      owner: diegoram
       name: homebrew-tap
-    homepage: "https://github.com/minimalart/mortal-prompter"
+    homepage: "https://github.com/diegoram/mortal-prompter"
     description: "CLI que orquesta code review entre Claude Code y Codex"
     license: "MIT"
     install: |
@@ -577,7 +577,7 @@ brews:
 
 release:
   github:
-    owner: minimalart
+    owner: diegoram
     name: mortal-prompter
   draft: false
   prerelease: auto
@@ -657,7 +657,7 @@ case $OS in
 esac
 
 # Obtener última versión
-REPO="minimalart/mortal-prompter"
+REPO="diegoram/mortal-prompter"
 LATEST_VERSION=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
 if [ -z "$LATEST_VERSION" ]; then
@@ -705,14 +705,14 @@ echo -e "${YELLOW}FIGHT!${NC} 🥊"
 
 ```bash
 # Opción 1: Homebrew (macOS/Linux)
-brew tap minimalart/tap
+brew tap diegoram/tap
 brew install mortal-prompter
 
 # Opción 2: Script directo (macOS/Linux)
-curl -sSL https://raw.githubusercontent.com/minimalart/mortal-prompter/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/diegoram/mortal-prompter/main/scripts/install.sh | bash
 
 # Opción 3: Go install (requiere Go)
-go install github.com/minimalart/mortal-prompter/cmd/mortal-prompter@latest
+go install github.com/diegoram/mortal-prompter/cmd/mortal-prompter@latest
 
 # Opción 4: Descarga manual desde GitHub Releases
 ```
@@ -761,13 +761,13 @@ CLI que orquesta un loop de desarrollo y code review entre **Claude Code** y **O
 
 ```bash
 # Con Go
-go install github.com/minimalart/mortal-prompter/cmd/mortal-prompter@latest
+go install github.com/diegoram/mortal-prompter/cmd/mortal-prompter@latest
 
 # Con Homebrew
-brew tap minimalart/tap && brew install mortal-prompter
+brew tap diegoram/tap && brew install mortal-prompter
 
 # Script directo
-curl -sSL https://raw.githubusercontent.com/minimalart/mortal-prompter/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/diegoram/mortal-prompter/main/scripts/install.sh | bash
 ```
 
 ## Uso

@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/minimalart/mortal-prompter/internal/config"
-	"github.com/minimalart/mortal-prompter/pkg/types"
+	"github.com/diegoram/mortal-prompter/internal/config"
+	"github.com/diegoram/mortal-prompter/pkg/types"
 )
 
 // ViewState represents the current view of the TUI

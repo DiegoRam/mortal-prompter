@@ -50,9 +50,9 @@ changelog:
 brews:
   - name: mortal-prompter
     repository:
-      owner: minimalart
+      owner: diegoram
       name: homebrew-tap
-    homepage: "https://github.com/minimalart/mortal-prompter"
+    homepage: "https://github.com/diegoram/mortal-prompter"
     description: "CLI that orchestrates code review battles between Claude Code and Codex"
     license: "MIT"
     install: |
@@ -62,7 +62,7 @@ brews:
 
 release:
   github:
-    owner: minimalart
+    owner: diegoram
     name: mortal-prompter
   draft: false
   prerelease: auto

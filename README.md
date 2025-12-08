@@ -53,25 +53,25 @@ User provides prompt
 ### With Go
 
 ```bash
-go install github.com/minimalart/mortal-prompter/cmd/mortal-prompter@latest
+go install github.com/diegoram/mortal-prompter/cmd/mortal-prompter@latest
 ```
 
 ### With Homebrew (macOS/Linux)
 
 ```bash
-brew tap minimalart/tap
+brew tap diegoram/tap
 brew install mortal-prompter
 ```
 
 ### Direct Script (macOS/Linux)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/minimalart/mortal-prompter/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/diegoram/mortal-prompter/main/scripts/install.sh | bash
 ```
 
 ### Manual Download
 
-Download the latest release from [GitHub Releases](https://github.com/minimalart/mortal-prompter/releases).
+Download the latest release from [GitHub Releases](https://github.com/diegoram/mortal-prompter/releases).
 
 ## Usage
 
@@ -161,7 +161,7 @@ Session artifacts are saved to `.mortal-prompter/`:
 
 ```bash
 # Clone the repo
-git clone https://github.com/minimalart/mortal-prompter.git
+git clone https://github.com/diegoram/mortal-prompter.git
 cd mortal-prompter
 
 # Build

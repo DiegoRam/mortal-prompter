@@ -3,8 +3,8 @@ package orchestrator
 import (
 	"testing"
 
-	"github.com/minimalart/mortal-prompter/internal/git"
-	"github.com/minimalart/mortal-prompter/pkg/types"
+	"github.com/diegoram/mortal-prompter/internal/git"
+	"github.com/diegoram/mortal-prompter/pkg/types"
 )
 
 func TestCountFilesInDiff(t *testing.T) {

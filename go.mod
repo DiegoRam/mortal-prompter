@@ -1,4 +1,4 @@
-module github.com/minimalart/mortal-prompter
+module github.com/diegoram/mortal-prompter
 
 go 1.24.0
 

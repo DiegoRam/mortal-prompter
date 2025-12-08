@@ -3,7 +3,7 @@ package tui
 import (
 	"time"
 
-	"github.com/minimalart/mortal-prompter/pkg/types"
+	"github.com/diegoram/mortal-prompter/pkg/types"
 )
 
 // EventType identifies the type of event from the orchestrator

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minimalart/mortal-prompter/pkg/types"
+	"github.com/diegoram/mortal-prompter/pkg/types"
 )
 
 // Reporter generates markdown reports for battle sessions.

@@ -3,7 +3,7 @@ package tui
 import (
 	"time"
 
-	"github.com/minimalart/mortal-prompter/pkg/types"
+	"github.com/diegoram/mortal-prompter/pkg/types"
 )
 
 // Observer is the interface for receiving orchestrator events

@@ -2,7 +2,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/minimalart/mortal-prompter/internal/config"
+	"github.com/diegoram/mortal-prompter/internal/config"
 )
 
 // Run starts the TUI and returns the entered prompt when the user submits

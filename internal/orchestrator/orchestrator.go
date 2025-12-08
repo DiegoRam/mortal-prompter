@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minimalart/mortal-prompter/internal/config"
-	"github.com/minimalart/mortal-prompter/internal/fighters"
-	"github.com/minimalart/mortal-prompter/internal/git"
-	"github.com/minimalart/mortal-prompter/internal/logger"
-	"github.com/minimalart/mortal-prompter/pkg/types"
+	"github.com/diegoram/mortal-prompter/internal/config"
+	"github.com/diegoram/mortal-prompter/internal/fighters"
+	"github.com/diegoram/mortal-prompter/internal/git"
+	"github.com/diegoram/mortal-prompter/internal/logger"
+	"github.com/diegoram/mortal-prompter/pkg/types"
 )
 
 // Observer is the interface for receiving orchestrator events

@@ -175,6 +175,8 @@ func (m Model) handleEvent(event Event) (tea.Model, tea.Cmd) {
 
 	case EventFighterEnter:
 		if payload, ok := event.Payload.(FighterEnterPayload); ok {
+			// Clear current action when a new fighter enters
+			m.currentAction = ""
 			if payload.Fighter == "Claude Code" {
 				m.claudeState = FighterActive
 				m.codexState = FighterIdle
@@ -182,8 +184,8 @@ func (m Model) handleEvent(event Event) (tea.Model, tea.Cmd) {
 					m.rounds[len(m.rounds)-1].CurrentPhase = "claude"
 				}
 			} else {
+				// Codex enters - Claude should already be finished via FighterFinish event
 				m.codexState = FighterActive
-				m.claudeState = FighterFinished
 				if len(m.rounds) > 0 {
 					m.rounds[len(m.rounds)-1].CurrentPhase = "codex"
 				}
