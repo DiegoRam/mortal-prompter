@@ -17,6 +17,20 @@ import (
 	"github.com/minimalart/mortal-prompter/pkg/types"
 )
 
+// Observer is the interface for receiving orchestrator events
+type Observer interface {
+	OnRoundStart(number int)
+	OnFighterEnter(fighter string)
+	OnFighterAction(action string)
+	OnFighterFinish(fighter string, duration time.Duration)
+	OnChangesDetected(fileCount int)
+	OnIssuesFound(issues []string)
+	OnNoIssues()
+	OnSessionComplete(result *types.SessionResult, success bool)
+	OnError(err error)
+	OnConfirmationRequired(message string) bool
+}
+
 // Orchestrator manages the code review battle between Claude Code and Codex.
 type Orchestrator struct {
 	config *config.Config
@@ -24,6 +38,9 @@ type Orchestrator struct {
 	codex  *fighters.Codex
 	git    *git.Git
 	logger *logger.Logger
+
+	// Observer for TUI updates (optional)
+	observer Observer
 
 	// Session state
 	rounds       []types.Round
@@ -46,6 +63,18 @@ func New(cfg *config.Config, log *logger.Logger) *Orchestrator {
 	}
 }
 
+// NewWithObserver creates a new Orchestrator instance with an observer for TUI updates.
+func NewWithObserver(cfg *config.Config, log *logger.Logger, observer Observer) *Orchestrator {
+	o := New(cfg, log)
+	o.observer = observer
+	return o
+}
+
+// SetPrompt allows setting the prompt after creation (for TUI mode)
+func (o *Orchestrator) SetPrompt(prompt string) {
+	o.config.Prompt = prompt
+}
+
 // Run executes the main battle loop and returns the session result.
 // The loop continues until:
 // - Codex finds no issues (LGTM) -> Success
@@ -58,7 +87,9 @@ func (o *Orchestrator) Run(ctx context.Context) (*types.SessionResult, error) {
 	// Verify this is a git repository
 	if !o.git.IsGitRepo() {
 		o.state = types.StateFailed
-		return nil, fmt.Errorf("working directory is not a git repository: %s", o.config.WorkDir)
+		err := fmt.Errorf("working directory is not a git repository: %s", o.config.WorkDir)
+		o.notifyError(err)
+		return nil, err
 	}
 
 	currentPrompt := o.config.Prompt
@@ -68,19 +99,28 @@ func (o *Orchestrator) Run(ctx context.Context) (*types.SessionResult, error) {
 		select {
 		case <-ctx.Done():
 			o.state = types.StateAborted
-			return o.buildResult(false), ctx.Err()
+			result := o.buildResult(false)
+			o.notifySessionComplete(result, false)
+			return result, ctx.Err()
 		default:
 		}
 
 		o.currentRound++
+
+		// Notify round start
+		o.notifyRoundStart(o.currentRound)
 
 		// Check if we've hit max iterations
 		if o.currentRound > o.config.MaxIterations {
 			o.state = types.StateWaitingConfirmation
 			if !o.promptContinue() {
 				o.state = types.StateAborted
-				o.logger.Info("Session aborted by user after max iterations")
-				return o.buildResult(false), nil
+				if o.logger != nil {
+					o.logger.Info("Session aborted by user after max iterations")
+				}
+				result := o.buildResult(false)
+				o.notifySessionComplete(result, false)
+				return result, nil
 			}
 			o.state = types.StateRunning
 		}
@@ -89,7 +129,10 @@ func (o *Orchestrator) Run(ctx context.Context) (*types.SessionResult, error) {
 		round, err := o.executeRound(ctx, o.currentRound, currentPrompt, previousIssues)
 		if err != nil {
 			o.state = types.StateFailed
-			o.logger.Error(err)
+			if o.logger != nil {
+				o.logger.Error(err)
+			}
+			o.notifyError(err)
 			return o.buildResult(false), err
 		}
 
@@ -98,22 +141,32 @@ func (o *Orchestrator) Run(ctx context.Context) (*types.SessionResult, error) {
 		// Check if we're done (no issues found)
 		if !round.HasIssues {
 			o.state = types.StateCompleted
-			o.logger.NoIssues()
-			o.logger.FinalVictory(len(o.rounds), time.Since(o.startTime))
+			if o.logger != nil {
+				o.logger.NoIssues()
+				o.logger.FinalVictory(len(o.rounds), time.Since(o.startTime))
+			}
+			o.notifyNoIssues()
 
 			// Auto-commit if enabled
 			if o.config.AutoCommit {
 				if err := o.autoCommit(); err != nil {
-					o.logger.Error(fmt.Errorf("auto-commit failed: %w", err))
+					if o.logger != nil {
+						o.logger.Error(fmt.Errorf("auto-commit failed: %w", err))
+					}
 				}
 			}
 
-			return o.buildResult(true), nil
+			result := o.buildResult(true)
+			o.notifySessionComplete(result, true)
+			return result, nil
 		}
 
 		// Prepare for next round
-		o.logger.IssuesFound(round.Issues)
-		o.logger.PreparingNextRound()
+		if o.logger != nil {
+			o.logger.IssuesFound(round.Issues)
+			o.logger.PreparingNextRound()
+		}
+		o.notifyIssuesFound(round.Issues)
 
 		previousIssues = round.Issues
 		currentPrompt = o.config.Prompt // Base prompt stays the same, issues are added by BuildPromptWithIssues
@@ -123,8 +176,12 @@ func (o *Orchestrator) Run(ctx context.Context) (*types.SessionResult, error) {
 			o.state = types.StateWaitingConfirmation
 			if !o.promptNextRound() {
 				o.state = types.StateAborted
-				o.logger.Info("Session aborted by user")
-				return o.buildResult(false), nil
+				if o.logger != nil {
+					o.logger.Info("Session aborted by user")
+				}
+				result := o.buildResult(false)
+				o.notifySessionComplete(result, false)
+				return result, nil
 			}
 			o.state = types.StateRunning
 		}
@@ -140,15 +197,21 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 		Timestamp: roundStart,
 	}
 
-	o.logger.RoundStart(number)
+	if o.logger != nil {
+		o.logger.RoundStart(number)
+	}
 
 	// Build the prompt (includes issues if any)
 	prompt := o.claude.BuildPromptWithIssues(basePrompt, previousIssues)
 	round.ClaudePrompt = prompt
 
 	// Execute Claude
-	o.logger.FighterEnter(o.claude.Name())
-	o.logger.FighterAction("Claude Code implementing changes...")
+	if o.logger != nil {
+		o.logger.FighterEnter(o.claude.Name())
+		o.logger.FighterAction("Claude Code implementing changes...")
+	}
+	o.notifyFighterEnter(o.claude.Name())
+	o.notifyFighterAction("Claude Code implementing changes...")
 
 	claudeStart := time.Now()
 	claudeOutput, err := o.claude.Execute(ctx, prompt)
@@ -159,10 +222,16 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 	}
 
 	round.ClaudeOutput = claudeOutput
-	o.logger.FighterFinish(o.claude.Name(), claudeDuration)
+	if o.logger != nil {
+		o.logger.FighterFinish(o.claude.Name(), claudeDuration)
+	}
+	o.notifyFighterFinish(o.claude.Name(), claudeDuration)
 
 	// Get git diff
-	o.logger.FighterAction("Capturing git diff...")
+	if o.logger != nil {
+		o.logger.FighterAction("Capturing git diff...")
+	}
+	o.notifyFighterAction("Capturing git diff...")
 
 	// Stage all changes first to capture everything
 	if err := o.git.StageAll(); err != nil {
@@ -178,7 +247,9 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 
 	// Check if there are any changes
 	if strings.TrimSpace(diff) == "" {
-		o.logger.Info("No changes detected in this round")
+		if o.logger != nil {
+			o.logger.Info("No changes detected in this round")
+		}
 		// If no changes, we consider it as no issues (nothing to review)
 		round.HasIssues = false
 		round.Duration = time.Since(roundStart)
@@ -187,11 +258,18 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 
 	// Log changes detected
 	fileCount := countFilesInDiff(diff)
-	o.logger.ChangesDetected(fileCount)
+	if o.logger != nil {
+		o.logger.ChangesDetected(fileCount)
+	}
+	o.notifyChangesDetected(fileCount)
 
 	// Execute Codex review
-	o.logger.FighterEnter(o.codex.Name())
-	o.logger.FighterAction("Codex reviewing changes...")
+	if o.logger != nil {
+		o.logger.FighterEnter(o.codex.Name())
+		o.logger.FighterAction("Codex reviewing changes...")
+	}
+	o.notifyFighterEnter(o.codex.Name())
+	o.notifyFighterAction("Codex reviewing changes...")
 
 	codexStart := time.Now()
 	reviewResult, err := o.codex.Review(ctx, diff)
@@ -201,7 +279,10 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 		return nil, fmt.Errorf("codex review failed: %w", err)
 	}
 
-	o.logger.FighterFinish(o.codex.Name(), codexDuration)
+	if o.logger != nil {
+		o.logger.FighterFinish(o.codex.Name(), codexDuration)
+	}
+	o.notifyFighterFinish(o.codex.Name(), codexDuration)
 
 	round.CodexReview = reviewResult.RawOutput
 	round.HasIssues = reviewResult.HasIssues
@@ -265,6 +346,13 @@ func (o *Orchestrator) autoCommit() error {
 
 // promptContinue asks the user if they want to continue after max iterations.
 func (o *Orchestrator) promptContinue() bool {
+	// If observer is set, use it for confirmation
+	if o.observer != nil {
+		msg := fmt.Sprintf("Maximum iterations (%d) reached. Continue?", o.config.MaxIterations)
+		return o.observer.OnConfirmationRequired(msg)
+	}
+
+	// Otherwise use terminal prompt
 	fmt.Printf("\n⚠️  Maximum iterations (%d) reached.\n", o.config.MaxIterations)
 	fmt.Print("Continue for another round? [y/N]: ")
 
@@ -273,6 +361,12 @@ func (o *Orchestrator) promptContinue() bool {
 
 // promptNextRound asks the user if they want to proceed with the next round (interactive mode).
 func (o *Orchestrator) promptNextRound() bool {
+	// If observer is set, use it for confirmation
+	if o.observer != nil {
+		return o.observer.OnConfirmationRequired("Proceed to next round?")
+	}
+
+	// Otherwise use terminal prompt
 	fmt.Print("\nProceed to next round? [Y/n]: ")
 	return readYesNoDefault(true)
 }
@@ -340,4 +434,60 @@ func (o *Orchestrator) GetCurrentRound() int {
 // GetRounds returns the history of all rounds.
 func (o *Orchestrator) GetRounds() []types.Round {
 	return o.rounds
+}
+
+// Observer notification methods
+
+func (o *Orchestrator) notifyRoundStart(number int) {
+	if o.observer != nil {
+		o.observer.OnRoundStart(number)
+	}
+}
+
+func (o *Orchestrator) notifyFighterEnter(fighter string) {
+	if o.observer != nil {
+		o.observer.OnFighterEnter(fighter)
+	}
+}
+
+func (o *Orchestrator) notifyFighterAction(action string) {
+	if o.observer != nil {
+		o.observer.OnFighterAction(action)
+	}
+}
+
+func (o *Orchestrator) notifyFighterFinish(fighter string, duration time.Duration) {
+	if o.observer != nil {
+		o.observer.OnFighterFinish(fighter, duration)
+	}
+}
+
+func (o *Orchestrator) notifyChangesDetected(fileCount int) {
+	if o.observer != nil {
+		o.observer.OnChangesDetected(fileCount)
+	}
+}
+
+func (o *Orchestrator) notifyIssuesFound(issues []string) {
+	if o.observer != nil {
+		o.observer.OnIssuesFound(issues)
+	}
+}
+
+func (o *Orchestrator) notifyNoIssues() {
+	if o.observer != nil {
+		o.observer.OnNoIssues()
+	}
+}
+
+func (o *Orchestrator) notifySessionComplete(result *types.SessionResult, success bool) {
+	if o.observer != nil {
+		o.observer.OnSessionComplete(result, success)
+	}
+}
+
+func (o *Orchestrator) notifyError(err error) {
+	if o.observer != nil {
+		o.observer.OnError(err)
+	}
 }

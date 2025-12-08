@@ -36,12 +36,33 @@ func TestNew(t *testing.T) {
 
 func TestValidate_MissingPrompt(t *testing.T) {
 	cfg := New()
+	// In TUI mode (default), prompt is not required at validation time
+	// Only required in CLI mode (NoTUI = true)
+	cfg.NoTUI = true
 	err := cfg.Validate()
 	if err == nil {
-		t.Error("expected error for missing prompt")
+		t.Error("expected error for missing prompt in CLI mode")
 	}
-	if err.Error() != "prompt is required: use -p or --prompt to specify" {
+	if err.Error() != "prompt is required in CLI mode: use -p or --prompt to specify" {
 		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidate_PromptNotRequiredInTUIMode(t *testing.T) {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "mortal-prompter-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := New()
+	cfg.WorkDir = tmpDir
+	// NoTUI defaults to false (TUI mode)
+	// Prompt should not be required in TUI mode
+	err = cfg.Validate()
+	if err != nil {
+		t.Errorf("unexpected error in TUI mode without prompt: %v", err)
 	}
 }
 
@@ -105,7 +126,7 @@ func TestBindFlags(t *testing.T) {
 	cfg.BindFlags(cmd)
 
 	// Test that all flags are registered
-	flags := []string{"prompt", "dir", "max-iterations", "interactive", "verbose", "output", "auto-commit", "commit-message"}
+	flags := []string{"prompt", "dir", "max-iterations", "interactive", "verbose", "output", "auto-commit", "commit-message", "no-tui"}
 	for _, flag := range flags {
 		if cmd.Flags().Lookup(flag) == nil {
 			t.Errorf("expected flag %q to be registered", flag)

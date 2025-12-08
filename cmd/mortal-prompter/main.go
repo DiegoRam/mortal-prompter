@@ -7,13 +7,17 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 	"github.com/minimalart/mortal-prompter/internal/config"
 	"github.com/minimalart/mortal-prompter/internal/logger"
 	"github.com/minimalart/mortal-prompter/internal/orchestrator"
 	"github.com/minimalart/mortal-prompter/internal/reporter"
+	"github.com/minimalart/mortal-prompter/internal/tui"
+	"github.com/minimalart/mortal-prompter/pkg/types"
 	"github.com/spf13/cobra"
 )
 
@@ -67,68 +71,15 @@ Example usage:
 				return nil
 			}
 
-			// Validate configuration
-			if err := cfg.Validate(); err != nil {
-				return err
+			// Determine if we should use CLI mode:
+			// - If --no-tui is set, use CLI mode
+			// - If -p/--prompt is provided, use CLI mode (for backwards compatibility)
+			useCLI := cfg.NoTUI || cfg.Prompt != ""
+
+			if useCLI {
+				return runCLI(cfg)
 			}
-
-			// Print banner and start
-			printBanner()
-
-			// Initialize logger
-			log, err := logger.New(cfg.OutputDir, cfg.Verbose)
-			if err != nil {
-				return fmt.Errorf("failed to initialize logger: %w", err)
-			}
-			defer log.Close()
-
-			// Setup context with cancellation for graceful shutdown
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			// Handle interrupt signals
-			sigChan := make(chan os.Signal, 1)
-			signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-			go func() {
-				<-sigChan
-				log.Info("Received interrupt signal, shutting down...")
-				cancel()
-			}()
-
-			// Log session start
-			log.Info(fmt.Sprintf("Initial prompt: %s", cfg.Prompt))
-			log.Info(fmt.Sprintf("Working directory: %s", cfg.WorkDir))
-			log.Info(fmt.Sprintf("Max iterations: %d", cfg.MaxIterations))
-			fmt.Println()
-
-			// Initialize and run orchestrator
-			orch := orchestrator.New(cfg, log)
-			result, err := orch.Run(ctx)
-
-			if err != nil {
-				return err
-			}
-
-			// Generate battle report
-			rep := reporter.New(cfg.OutputDir)
-			reportPath, reportErr := rep.GenerateReport(result, cfg.Prompt)
-			if reportErr != nil {
-				log.Error(fmt.Errorf("failed to generate report: %w", reportErr))
-			}
-
-			// Print summary
-			if result.Success {
-				successColor.Printf("\nSession completed successfully in %d round(s)\n", result.TotalRounds)
-			} else {
-				infoColor.Printf("\nSession ended after %d round(s)\n", result.TotalRounds)
-			}
-
-			infoColor.Printf("Log file: %s\n", log.GetLogFilePath())
-			if reportErr == nil {
-				infoColor.Printf("Report: %s\n", reportPath)
-			}
-
-			return nil
+			return runTUI(cfg)
 		},
 	}
 
@@ -146,19 +97,19 @@ func printBanner() {
 	banner := `
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║                                                                          ║
-║   ███╗   ███╗ ██████╗ ██████╗ ████████╗ █████╗ ██╗                        ║
-║   ████╗ ████║██╔═══██╗██╔══██╗╚══██╔══╝██╔══██╗██║                        ║
-║   ██╔████╔██║██║   ██║██████╔╝   ██║   ███████║██║                        ║
-║   ██║╚██╔╝██║██║   ██║██╔══██╗   ██║   ██╔══██║██║                        ║
-║   ██║ ╚═╝ ██║╚██████╔╝██║  ██║   ██║   ██║  ██║███████╗                   ║
-║   ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝                   ║
+║   ███╗   ███╗ ██████╗ ██████╗ ████████╗ █████╗ ██╗                       ║
+║   ████╗ ████║██╔═══██╗██╔══██╗╚══██╔══╝██╔══██╗██║                       ║
+║   ██╔████╔██║██║   ██║██████╔╝   ██║   ███████║██║                       ║
+║   ██║╚██╔╝██║██║   ██║██╔══██╗   ██║   ██╔══██║██║                       ║
+║   ██║ ╚═╝ ██║╚██████╔╝██║  ██║   ██║   ██║  ██║███████╗                  ║
+║   ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝                  ║
 ║                                                                          ║
-║   ██████╗ ██████╗  ██████╗ ███╗   ███╗██████╗ ████████╗███████╗██████╗    ║
-║   ██╔══██╗██╔══██╗██╔═══██╗████╗ ████║██╔══██╗╚══██╔══╝██╔════╝██╔══██╗   ║
-║   ██████╔╝██████╔╝██║   ██║██╔████╔██║██████╔╝   ██║   █████╗  ██████╔╝   ║
-║   ██╔═══╝ ██╔══██╗██║   ██║██║╚██╔╝██║██╔═══╝    ██║   ██╔══╝  ██╔══██╗   ║
-║   ██║     ██║  ██║╚██████╔╝██║ ╚═╝ ██║██║        ██║   ███████╗██║  ██║   ║
-║   ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝        ╚═╝   ╚══════╝╚═╝  ╚═╝   ║
+║   ██████╗ ██████╗  ██████╗ ███╗   ███╗██████╗ ████████╗███████╗██████╗   ║
+║   ██╔══██╗██╔══██╗██╔═══██╗████╗ ████║██╔══██╗╚══██╔══╝██╔════╝██╔══██╗  ║
+║   ██████╔╝██████╔╝██║   ██║██╔████╔██║██████╔╝   ██║   █████╗  ██████╔╝  ║
+║   ██╔═══╝ ██╔══██╗██║   ██║██║╚██╔╝██║██╔═══╝    ██║   ██╔══╝  ██╔══██╗  ║
+║   ██║     ██║  ██║╚██████╔╝██║ ╚═╝ ██║██║        ██║   ███████╗██║  ██║  ║
+║   ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝        ╚═╝   ╚══════╝╚═╝  ╚═╝  ║
 ║                                                                          ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 `
@@ -177,4 +128,213 @@ func printBanner() {
 func printVersion() {
 	fmt.Printf("mortal-prompter version %s\n", Version)
 	fmt.Printf("Built: %s\n", BuildTime)
+}
+
+// runTUI runs the TUI-based interface
+func runTUI(cfg *config.Config) error {
+	// Validate and prepare working directory
+	if err := validateWorkDir(cfg); err != nil {
+		return err
+	}
+
+	// Initialize logger (for file logging, even in TUI mode)
+	log, err := logger.New(cfg.OutputDir, cfg.Verbose)
+	if err != nil {
+		return fmt.Errorf("failed to initialize logger: %w", err)
+	}
+	defer log.Close()
+
+	// Create TUI model
+	model := tui.NewModel(cfg)
+
+	// Setup context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle interrupt
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		cancel()
+	}()
+
+	// Create and run the program
+	p := tea.NewProgram(model, tea.WithAltScreen())
+
+	// Run TUI - it will handle prompts and battle internally
+	finalModel, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("TUI error: %w", err)
+	}
+
+	m := finalModel.(tui.Model)
+
+	// If battle wasn't started (user quit from prompt), exit gracefully
+	if !m.IsBattleStarted() {
+		return nil
+	}
+
+	// Get the prompt from TUI
+	prompt := m.GetPrompt()
+	if prompt == "" {
+		return nil
+	}
+
+	// Now run the actual battle (TUI was just for input)
+	// Set the prompt in config
+	cfg.Prompt = prompt
+
+	// Create a new TUI model for battle phase
+	battleModel := tui.NewModel(cfg)
+	battleModel.SetBattleStarted(prompt)
+
+	// Create observer using the battle model's channels
+	observer := tui.NewChannelObserver(battleModel.GetEventChannel(), battleModel.GetResponseChannel())
+
+	// Enable silent mode on logger - TUI handles display
+	log.SetSilentMode(true)
+
+	// Create orchestrator with observer
+	orch := orchestrator.NewWithObserver(cfg, log, observer)
+
+	// Run orchestrator in goroutine
+	var result *types.SessionResult
+	var orchErr error
+	done := make(chan struct{})
+
+	go func() {
+		result, orchErr = orch.Run(ctx)
+		close(done)
+	}()
+
+	// Run battle TUI
+	battleProgram := tea.NewProgram(battleModel, tea.WithAltScreen())
+	_, tuiErr := battleProgram.Run()
+	if tuiErr != nil {
+		cancel()
+		return fmt.Errorf("TUI error: %w", tuiErr)
+	}
+
+	// Wait for orchestrator to finish
+	<-done
+
+	// Generate report if we have results
+	if result != nil {
+		rep := reporter.New(cfg.OutputDir)
+		reportPath, reportErr := rep.GenerateReport(result, prompt)
+		if reportErr == nil {
+			infoColor.Printf("Report: %s\n", reportPath)
+		}
+
+		// Print summary
+		if result.Success {
+			successColor.Printf("\nSession completed successfully in %d round(s)\n", result.TotalRounds)
+		} else {
+			infoColor.Printf("\nSession ended after %d round(s)\n", result.TotalRounds)
+		}
+
+		infoColor.Printf("Log file: %s\n", log.GetLogFilePath())
+	}
+
+	if orchErr != nil {
+		return orchErr
+	}
+
+	return nil
+}
+
+// runCLI runs the original CLI-based interface
+func runCLI(cfg *config.Config) error {
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+
+	// Print banner and start
+	printBanner()
+
+	// Initialize logger
+	log, err := logger.New(cfg.OutputDir, cfg.Verbose)
+	if err != nil {
+		return fmt.Errorf("failed to initialize logger: %w", err)
+	}
+	defer log.Close()
+
+	// Setup context with cancellation for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle interrupt signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		log.Info("Received interrupt signal, shutting down...")
+		cancel()
+	}()
+
+	// Log session start
+	log.Info(fmt.Sprintf("Initial prompt: %s", cfg.Prompt))
+	log.Info(fmt.Sprintf("Working directory: %s", cfg.WorkDir))
+	log.Info(fmt.Sprintf("Max iterations: %d", cfg.MaxIterations))
+	fmt.Println()
+
+	// Initialize and run orchestrator
+	orch := orchestrator.New(cfg, log)
+	result, err := orch.Run(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	// Generate battle report
+	rep := reporter.New(cfg.OutputDir)
+	reportPath, reportErr := rep.GenerateReport(result, cfg.Prompt)
+	if reportErr != nil {
+		log.Error(fmt.Errorf("failed to generate report: %w", reportErr))
+	}
+
+	// Print summary
+	if result.Success {
+		successColor.Printf("\nSession completed successfully in %d round(s)\n", result.TotalRounds)
+	} else {
+		infoColor.Printf("\nSession ended after %d round(s)\n", result.TotalRounds)
+	}
+
+	infoColor.Printf("Log file: %s\n", log.GetLogFilePath())
+	if reportErr == nil {
+		infoColor.Printf("Report: %s\n", reportPath)
+	}
+
+	return nil
+}
+
+// validateWorkDir validates and resolves the working directory
+func validateWorkDir(cfg *config.Config) error {
+	absWorkDir, err := filepath.Abs(cfg.WorkDir)
+	if err != nil {
+		return fmt.Errorf("invalid working directory: %w", err)
+	}
+
+	info, err := os.Stat(absWorkDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("working directory does not exist: %s", absWorkDir)
+		}
+		return fmt.Errorf("cannot access working directory: %w", err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("working directory path is not a directory: %s", absWorkDir)
+	}
+
+	cfg.WorkDir = absWorkDir
+
+	// Resolve output directory relative to working directory
+	if !filepath.IsAbs(cfg.OutputDir) {
+		cfg.OutputDir = filepath.Join(cfg.WorkDir, cfg.OutputDir)
+	}
+
+	return cfg.EnsureOutputDir()
 }

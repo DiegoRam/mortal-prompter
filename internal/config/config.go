@@ -18,7 +18,7 @@ const (
 
 // Config holds all configuration options for mortal-prompter.
 type Config struct {
-	// Prompt is the initial prompt to send to Claude Code (required)
+	// Prompt is the initial prompt to send to Claude Code (required in CLI mode)
 	Prompt string
 
 	// WorkDir is the working directory for git operations and CLI execution
@@ -41,6 +41,9 @@ type Config struct {
 
 	// CommitMessage is the base message for auto-commits
 	CommitMessage string
+
+	// NoTUI disables the TUI and uses CLI mode instead
+	NoTUI bool
 }
 
 // New creates a new Config with default values.
@@ -81,12 +84,16 @@ func (c *Config) BindFlags(cmd *cobra.Command) {
 
 	flags.StringVar(&c.CommitMessage, "commit-message", DefaultCommitMessage,
 		"Base message for auto-commits")
+
+	flags.BoolVar(&c.NoTUI, "no-tui", false,
+		"Disable TUI and use CLI mode (requires -p/--prompt)")
 }
 
 // Validate checks that the configuration is valid and returns an error if not.
 func (c *Config) Validate() error {
-	if c.Prompt == "" {
-		return errors.New("prompt is required: use -p or --prompt to specify")
+	// Prompt is only required in CLI mode (--no-tui or when -p is provided)
+	if c.NoTUI && c.Prompt == "" {
+		return errors.New("prompt is required in CLI mode: use -p or --prompt to specify")
 	}
 
 	if c.MaxIterations < 1 {

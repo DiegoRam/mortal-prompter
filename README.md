@@ -31,7 +31,13 @@ Final commit + report
 
 ## Installation
 
-<!-- TODO: Add installation verification -->
+### Prerequisites
+
+Before installing Mortal Prompter, ensure you have the following CLIs installed:
+
+- **Git** - [Install Git](https://git-scm.com/downloads)
+- **Claude Code CLI** - [Install Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- **OpenAI Codex CLI** - [Install Codex](https://github.com/openai/codex)
 
 ### With Go
 
@@ -124,8 +130,8 @@ Session artifacts are saved to `.mortal-prompter/`:
 ## Requirements
 
 - Git installed and configured
-- [Claude Code CLI](https://docs.anthropic.com/claude-code) installed (`claude`)
-- [OpenAI Codex CLI](https://openai.com/codex) installed (`codex`)
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed (`claude`)
+- [OpenAI Codex CLI](https://github.com/openai/codex) installed (`codex`)
 
 ## Development
 

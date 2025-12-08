@@ -35,10 +35,12 @@ cmd/mortal-prompter/main.go    # Entry point with CLI flags
 internal/
 ├── orchestrator/              # Main "combat" loop between LLMs
 ├── fighters/
+│   ├── fighter.go             # Fighter interface
 │   ├── claude.go              # Wrapper for claude CLI
 │   └── codex.go               # Wrapper for codex CLI
 ├── git/                       # Git operations (diff, commit)
 ├── logger/                    # Terminal + file logging with arcade-style output
+├── reporter/                  # Markdown battle report generator
 └── config/                    # Configuration and flag parsing
 pkg/types/                     # Shared types
 ```

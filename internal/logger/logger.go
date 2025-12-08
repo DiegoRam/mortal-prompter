@@ -18,11 +18,12 @@ import (
 // Logger handles both terminal output with colors/emojis and file logging
 // for the mortal-prompter application.
 type Logger struct {
-	verbose   bool
-	logFile   *os.File
-	outputDir string
-	spinner   *spinner.Spinner
-	mu        sync.Mutex
+	verbose    bool
+	silentMode bool // When true, don't print to terminal (for TUI mode)
+	logFile    *os.File
+	outputDir  string
+	spinner    *spinner.Spinner
+	mu         sync.Mutex
 
 	// Writers for terminal output (allows injection for testing)
 	stdout io.Writer
@@ -71,6 +72,15 @@ func (l *Logger) SetOutputWriters(stdout, stderr io.Writer) {
 	l.stderr = stderr
 }
 
+// SetSilentMode enables or disables silent mode.
+// In silent mode, the logger only writes to the log file, not to terminal.
+// This is useful when running in TUI mode.
+func (l *Logger) SetSilentMode(silent bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.silentMode = silent
+}
+
 // Close closes the log file handle.
 func (l *Logger) Close() error {
 	l.mu.Lock()
@@ -117,13 +127,19 @@ func stripEmojis(s string) string {
 	return replacer.Replace(s)
 }
 
-// printToTerminal prints a message to stdout.
+// printToTerminal prints a message to stdout (unless in silent mode).
 func (l *Logger) printToTerminal(msg string) {
+	if l.silentMode {
+		return
+	}
 	fmt.Fprintln(l.stdout, msg)
 }
 
-// printToTerminalErr prints a message to stderr.
+// printToTerminalErr prints a message to stderr (unless in silent mode).
 func (l *Logger) printToTerminalErr(msg string) {
+	if l.silentMode {
+		return
+	}
 	fmt.Fprintln(l.stderr, msg)
 }
 
@@ -169,7 +185,12 @@ func (l *Logger) FighterAction(action string) {
 
 	l.StopSpinnerInternal()
 
-	l.writeToFile(action)
+	l.writeToFile("%s", action)
+
+	// Don't start spinner in silent mode
+	if l.silentMode {
+		return
+	}
 
 	// Create and start spinner with hourglass prefix
 	l.spinner = spinner.New(spinner.CharSets[14], 100*time.Millisecond)
@@ -309,6 +330,11 @@ func (l *Logger) StartSpinner(message string) {
 	defer l.mu.Unlock()
 
 	l.StopSpinnerInternal()
+
+	// Don't start spinner in silent mode
+	if l.silentMode {
+		return
+	}
 
 	l.spinner = spinner.New(spinner.CharSets[14], 100*time.Millisecond)
 	l.spinner.Writer = l.stdout
