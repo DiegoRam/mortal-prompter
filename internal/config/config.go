@@ -3,9 +3,12 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/diegoram/mortal-prompter/internal/fighters"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +21,7 @@ const (
 
 // Config holds all configuration options for mortal-prompter.
 type Config struct {
-	// Prompt is the initial prompt to send to Claude Code (required in CLI mode)
+	// Prompt is the initial prompt to send to the implementer (required in CLI mode)
 	Prompt string
 
 	// WorkDir is the working directory for git operations and CLI execution
@@ -44,6 +47,12 @@ type Config struct {
 
 	// NoTUI disables the TUI and uses CLI mode instead
 	NoTUI bool
+
+	// Implementer is the fighter type used as implementer (claude, codex, gemini)
+	Implementer fighters.FighterType
+
+	// Reviewer is the fighter type used as reviewer (claude, codex, gemini)
+	Reviewer fighters.FighterType
 }
 
 // New creates a new Config with default values.
@@ -53,6 +62,8 @@ func New() *Config {
 		MaxIterations: DefaultMaxIterations,
 		OutputDir:     DefaultOutputDir,
 		CommitMessage: DefaultCommitMessage,
+		Implementer:   fighters.FighterTypeClaude,
+		Reviewer:      fighters.FighterTypeCodex,
 	}
 }
 
@@ -62,7 +73,7 @@ func (c *Config) BindFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
 	flags.StringVarP(&c.Prompt, "prompt", "p", "",
-		"Initial prompt for Claude Code (required)")
+		"Initial prompt for the implementer (required in CLI mode)")
 
 	flags.StringVarP(&c.WorkDir, "dir", "d", ".",
 		"Working directory for git operations")
@@ -87,6 +98,41 @@ func (c *Config) BindFlags(cmd *cobra.Command) {
 
 	flags.BoolVar(&c.NoTUI, "no-tui", false,
 		"Disable TUI and use CLI mode (requires -p/--prompt)")
+
+	// Fighter selection flags
+	var implementer, reviewer string
+	flags.StringVar(&implementer, "implementer", "claude",
+		"Fighter to use as implementer (claude, codex, gemini)")
+	flags.StringVar(&reviewer, "reviewer", "codex",
+		"Fighter to use as reviewer (claude, codex, gemini)")
+
+	// Store the string values to be parsed in a PreRun hook
+	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		var err error
+		c.Implementer, err = parseFighterType(implementer)
+		if err != nil {
+			return fmt.Errorf("invalid implementer: %w", err)
+		}
+		c.Reviewer, err = parseFighterType(reviewer)
+		if err != nil {
+			return fmt.Errorf("invalid reviewer: %w", err)
+		}
+		return nil
+	}
+}
+
+// parseFighterType converts a string to a FighterType
+func parseFighterType(s string) (fighters.FighterType, error) {
+	switch strings.ToLower(s) {
+	case "claude":
+		return fighters.FighterTypeClaude, nil
+	case "codex":
+		return fighters.FighterTypeCodex, nil
+	case "gemini":
+		return fighters.FighterTypeGemini, nil
+	default:
+		return "", fmt.Errorf("unknown fighter type: %s (valid: claude, codex, gemini)", s)
+	}
 }
 
 // Validate checks that the configuration is valid and returns an error if not.

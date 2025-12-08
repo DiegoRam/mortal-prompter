@@ -6,11 +6,14 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/diegoram/mortal-prompter/internal/fighters"
 )
 
 // View renders the current view
 func (m Model) View() string {
 	switch m.view {
+	case ViewFighterSelect:
+		return m.viewFighterSelect()
 	case ViewPrompt:
 		return m.viewPrompt()
 	case ViewBattle:
@@ -22,6 +25,89 @@ func (m Model) View() string {
 	default:
 		return "Unknown view"
 	}
+}
+
+// viewFighterSelect renders the fighter selection view
+func (m Model) viewFighterSelect() string {
+	var sb strings.Builder
+
+	// Banner
+	banner := `
+╔════════════════════════════════════════════════════════════════════════╗
+║                                                                        ║
+║  ███╗   ███╗ ██████╗ ██████╗ ████████╗ █████╗ ██╗                      ║
+║  ████╗ ████║██╔═══██╗██╔══██╗╚══██╔══╝██╔══██╗██║                      ║
+║  ██╔████╔██║██║   ██║██████╔╝   ██║   ███████║██║                      ║
+║  ██║╚██╔╝██║██║   ██║██╔══██╗   ██║   ██╔══██║██║                      ║
+║  ██║ ╚═╝ ██║╚██████╔╝██║  ██║   ██║   ██║  ██║███████╗                 ║
+║  ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝                 ║
+║                                                                        ║
+║  ██████╗ ██████╗  ██████╗ ███╗   ███╗██████╗ ████████╗███████╗██████╗  ║
+║  ██╔══██╗██╔══██╗██╔═══██╗████╗ ████║██╔══██╗╚══██╔══╝██╔════╝██╔══██╗ ║
+║  ██████╔╝██████╔╝██║   ██║██╔████╔██║██████╔╝   ██║   █████╗  ██████╔╝ ║
+║  ██╔═══╝ ██╔══██╗██║   ██║██║╚██╔╝██║██╔═══╝    ██║   ██╔══╝  ██╔══██╗ ║
+║  ██║     ██║  ██║╚██████╔╝██║ ╚═╝ ██║██║        ██║   ███████╗██║  ██║ ║
+║  ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝        ╚═╝   ╚══════╝╚═╝  ╚═╝ ║
+║                                                                        ║
+╚════════════════════════════════════════════════════════════════════════╝`
+
+	sb.WriteString(TitleStyle.Render(banner))
+	sb.WriteString("\n\n")
+	sb.WriteString(SuccessStyle.Render("                         CHOOSE YOUR FIGHTERS!"))
+	sb.WriteString("\n\n")
+	sb.WriteString("═══════════════════════════════════════════════════════════════════════════")
+	sb.WriteString("\n\n")
+
+	// Fighter selection
+	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Bold(true)
+	unselectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
+	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00")).Bold(true)
+	activeFieldStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Bold(true)
+
+	// Implementer selection
+	implementerLabel := "  IMPLEMENTER: "
+	if m.fighterSelectField == FieldImplementer {
+		implementerLabel = activeFieldStyle.Render("▶ IMPLEMENTER: ")
+	} else {
+		implementerLabel = labelStyle.Render("  IMPLEMENTER: ")
+	}
+	sb.WriteString(implementerLabel)
+	sb.WriteString(m.renderFighterOptions(m.implementerType, selectedStyle, unselectedStyle))
+	sb.WriteString("\n\n")
+
+	// Reviewer selection
+	reviewerLabel := "  REVIEWER:    "
+	if m.fighterSelectField == FieldReviewer {
+		reviewerLabel = activeFieldStyle.Render("▶ REVIEWER:    ")
+	} else {
+		reviewerLabel = labelStyle.Render("  REVIEWER:    ")
+	}
+	sb.WriteString(reviewerLabel)
+	sb.WriteString(m.renderFighterOptions(m.reviewerType, selectedStyle, unselectedStyle))
+	sb.WriteString("\n\n")
+
+	sb.WriteString("═══════════════════════════════════════════════════════════════════════════")
+	sb.WriteString("\n\n")
+
+	// Help
+	sb.WriteString(HelpStyle.Render("  ←/→: select fighter  •  ↑/↓: switch field  •  enter: continue  •  ctrl+c: quit"))
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// renderFighterOptions renders the fighter options for selection
+func (m Model) renderFighterOptions(selected fighters.FighterType, selectedStyle, unselectedStyle lipgloss.Style) string {
+	var parts []string
+	for _, ft := range m.availableFighters {
+		name := strings.ToUpper(string(ft))
+		if ft == selected {
+			parts = append(parts, selectedStyle.Render("["+name+"]"))
+		} else {
+			parts = append(parts, unselectedStyle.Render(" "+name+" "))
+		}
+	}
+	return strings.Join(parts, "  ")
 }
 
 // viewPrompt renders the prompt input view
@@ -112,38 +198,46 @@ func (m Model) viewBattle() string {
 	sb.WriteString(titleStyle.Render(midBorder) + "\n")
 
 	// Fighter status text (plain, for width calculation)
-	claudeStatusText := "WAITING"
-	codexStatusText := "WAITING"
+	implementerStatusText := "WAITING"
+	reviewerStatusText := "WAITING"
 
-	switch m.claudeState {
+	switch m.implementerState {
 	case FighterActive:
-		claudeStatusText = "FIGHTING"
+		implementerStatusText = "FIGHTING"
 	case FighterFinished:
-		claudeStatusText = "DONE"
+		implementerStatusText = "DONE"
 	}
 
-	switch m.codexState {
+	switch m.reviewerState {
 	case FighterActive:
-		codexStatusText = "FIGHTING"
+		reviewerStatusText = "FIGHTING"
 	case FighterFinished:
-		codexStatusText = "DONE"
+		reviewerStatusText = "DONE"
 	}
 
 	// Build fighter display with proper spacing
-	// Layout: ║ CLAUDE CODE         VS         CODEX              ║
+	// Layout: ║ IMPLEMENTER         VS         REVIEWER              ║
 	// We have W=60 chars inside the box
 	// Left section: 25 chars, VS: 4 chars (with spaces), Right section: 25 chars, padding: 6
 	const colWidth = 25
 
-	// Fighter names line
-	claudeNamePlain := "CLAUDE CODE"
-	codexNamePlain := "CODEX"
-	claudeNameStyled := fighterStyle.Render(claudeNamePlain)
-	codexNameStyled := fighterStyle.Render(codexNamePlain)
+	// Get fighter names (use defaults if not set)
+	implementerName := m.implementerName
+	if implementerName == "" {
+		implementerName = strings.ToUpper(string(m.implementerType))
+	}
+	reviewerName := m.reviewerName
+	if reviewerName == "" {
+		reviewerName = strings.ToUpper(string(m.reviewerType))
+	}
 
-	line1 := " " + claudeNameStyled + strings.Repeat(" ", colWidth-1-len(claudeNamePlain)) +
+	// Fighter names line
+	implementerNameStyled := fighterStyle.Render(implementerName)
+	reviewerNameStyled := fighterStyle.Render(reviewerName)
+
+	line1 := " " + implementerNameStyled + strings.Repeat(" ", colWidth-1-len(implementerName)) +
 		"VS" +
-		strings.Repeat(" ", colWidth-len(codexNamePlain)) + codexNameStyled +
+		strings.Repeat(" ", colWidth-len(reviewerName)) + reviewerNameStyled +
 		strings.Repeat(" ", W-2*colWidth-2-1)
 	sb.WriteString("║" + line1 + "║\n")
 
@@ -157,32 +251,64 @@ func (m Model) viewBattle() string {
 	sb.WriteString("║" + line2 + "║\n")
 
 	// Status line
-	var claudeStatusStyled, codexStatusStyled string
-	switch m.claudeState {
+	var implementerStatusStyled, reviewerStatusStyled string
+	switch m.implementerState {
 	case FighterActive:
-		claudeStatusStyled = activeStyle.Render(claudeStatusText)
+		implementerStatusStyled = activeStyle.Render(implementerStatusText)
 	case FighterFinished:
-		claudeStatusStyled = infoStyle.Render(claudeStatusText)
+		implementerStatusStyled = infoStyle.Render(implementerStatusText)
 	default:
-		claudeStatusStyled = waitingStyle.Render(claudeStatusText)
+		implementerStatusStyled = waitingStyle.Render(implementerStatusText)
 	}
 
-	switch m.codexState {
+	switch m.reviewerState {
 	case FighterActive:
-		codexStatusStyled = activeStyle.Render(codexStatusText)
+		reviewerStatusStyled = activeStyle.Render(reviewerStatusText)
 	case FighterFinished:
-		codexStatusStyled = infoStyle.Render(codexStatusText)
+		reviewerStatusStyled = infoStyle.Render(reviewerStatusText)
 	default:
-		codexStatusStyled = waitingStyle.Render(codexStatusText)
+		reviewerStatusStyled = waitingStyle.Render(reviewerStatusText)
 	}
 
-	line3 := " " + claudeStatusStyled + strings.Repeat(" ", colWidth-1-len(claudeStatusText)) +
+	line3 := " " + implementerStatusStyled + strings.Repeat(" ", colWidth-1-len(implementerStatusText)) +
 		"  " +
-		strings.Repeat(" ", colWidth-len(codexStatusText)) + codexStatusStyled +
+		strings.Repeat(" ", colWidth-len(reviewerStatusText)) + reviewerStatusStyled +
 		strings.Repeat(" ", W-2*colWidth-2-1)
 	sb.WriteString("║" + line3 + "║\n")
 
 	sb.WriteString(midBorder + "\n")
+
+	// Prompt section
+	if m.prompt != "" {
+		promptLabel := " PROMPT: "
+		promptLabelWidth := len(promptLabel)
+		styledLabel := warningStyle.Render(promptLabel)
+		sb.WriteString(padLine(styledLabel, promptLabelWidth))
+
+		// Show the prompt, truncating if necessary and wrapping to multiple lines
+		maxPromptWidth := W - 4 // Leave space for "  " prefix and padding
+		promptText := m.prompt
+		// Replace newlines with spaces for display
+		promptText = strings.ReplaceAll(promptText, "\n", " ")
+		promptText = strings.ReplaceAll(promptText, "\r", "")
+
+		// Truncate if too long (show first 2 lines worth)
+		maxTotalLen := maxPromptWidth * 2
+		if len(promptText) > maxTotalLen {
+			promptText = promptText[:maxTotalLen-3] + "..."
+		}
+
+		// Split into lines
+		for len(promptText) > 0 {
+			lineLen := min(len(promptText), maxPromptWidth)
+			lineText := "  " + promptText[:lineLen]
+			lineWidth := len(lineText)
+			sb.WriteString(padLine(lineText, lineWidth))
+			promptText = promptText[lineLen:]
+		}
+
+		sb.WriteString(midBorder + "\n")
+	}
 
 	// Round history
 	for _, round := range m.rounds {
@@ -233,6 +359,22 @@ func (m Model) viewBattle() string {
 	}
 
 	sb.WriteString(midBorder + "\n")
+
+	// Log file path
+	if m.logFilePath != "" {
+		logLabel := " LOG: "
+		// Truncate path if too long
+		maxPathLen := W - len(logLabel) - 2
+		logPath := m.logFilePath
+		if len(logPath) > maxPathLen {
+			logPath = "..." + logPath[len(logPath)-maxPathLen+3:]
+		}
+		logLine := logLabel + logPath
+		logWidth := len(logLine)
+		styledLog := " " + waitingStyle.Render("LOG:") + " " + waitingStyle.Render(logPath)
+		sb.WriteString(padLine(styledLog, logWidth))
+		sb.WriteString(midBorder + "\n")
+	}
 
 	// Help line
 	helpText := " d: details | q: abort | ?: help"

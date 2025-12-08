@@ -417,3 +417,50 @@ func (l *Logger) PreparingNextRound() {
 	l.printToTerminal(yellow.Sprint(msg))
 	l.writeToFile("Preparing next round")
 }
+
+// CLIInput logs the input/prompt sent to a CLI tool.
+func (l *Logger) CLIInput(fighterName, prompt string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.writeToFileRaw("\n" + strings.Repeat("=", 80))
+	l.writeToFileRaw("[" + fighterName + "] CLI INPUT:")
+	l.writeToFileRaw(strings.Repeat("-", 80))
+	l.writeToFileRaw(prompt)
+	l.writeToFileRaw(strings.Repeat("=", 80) + "\n")
+}
+
+// CLIOutput logs the output received from a CLI tool.
+func (l *Logger) CLIOutput(fighterName, output string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.writeToFileRaw("\n" + strings.Repeat("=", 80))
+	l.writeToFileRaw("[" + fighterName + "] CLI OUTPUT:")
+	l.writeToFileRaw(strings.Repeat("-", 80))
+	l.writeToFileRaw(output)
+	l.writeToFileRaw(strings.Repeat("=", 80) + "\n")
+}
+
+// GitDiff logs the git diff captured.
+func (l *Logger) GitDiff(diff string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.writeToFileRaw("\n" + strings.Repeat("=", 80))
+	l.writeToFileRaw("[GIT DIFF]:")
+	l.writeToFileRaw(strings.Repeat("-", 80))
+	l.writeToFileRaw(diff)
+	l.writeToFileRaw(strings.Repeat("=", 80) + "\n")
+}
+
+// writeToFileRaw writes a message to the log file without timestamp prefix.
+func (l *Logger) writeToFileRaw(msg string) {
+	if l.logFile == nil {
+		return
+	}
+
+	// Strip emojis and special characters for clean logs
+	cleanMsg := stripEmojis(msg)
+	fmt.Fprintln(l.logFile, cleanMsg)
+}

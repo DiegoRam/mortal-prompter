@@ -68,6 +68,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKeyMsg handles keyboard input
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.view {
+	case ViewFighterSelect:
+		return m.handleFighterSelectKeys(msg)
 	case ViewPrompt:
 		return m.handlePromptKeys(msg)
 	case ViewBattle:
@@ -77,6 +79,41 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ViewConfirmation:
 		return m.handleConfirmationKeys(msg)
 	}
+	return m, nil
+}
+
+// handleFighterSelectKeys handles keys in the fighter selection view
+func (m Model) handleFighterSelectKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+
+	case tea.KeyEnter:
+		// Move to prompt view
+		m.view = ViewPrompt
+		m.textarea.Focus()
+		return m, nil
+
+	case tea.KeyUp, tea.KeyDown, tea.KeyTab:
+		// Switch between implementer and reviewer fields
+		if m.fighterSelectField == FieldImplementer {
+			m.fighterSelectField = FieldReviewer
+		} else {
+			m.fighterSelectField = FieldImplementer
+		}
+		return m, nil
+
+	case tea.KeyLeft:
+		// Move to previous fighter option
+		m.moveFighterSelection(-1)
+		return m, nil
+
+	case tea.KeyRight:
+		// Move to next fighter option
+		m.moveFighterSelection(1)
+		return m, nil
+	}
+
 	return m, nil
 }
 
@@ -167,27 +204,28 @@ func (m Model) handleEvent(event Event) (tea.Model, tea.Cmd) {
 			m.rounds = append(m.rounds, RoundDisplay{
 				Number:       payload.Number,
 				Status:       "in_progress",
-				CurrentPhase: "claude",
+				CurrentPhase: "implementer",
 			})
-			m.claudeState = FighterIdle
-			m.codexState = FighterIdle
+			m.implementerState = FighterIdle
+			m.reviewerState = FighterIdle
 		}
 
 	case EventFighterEnter:
 		if payload, ok := event.Payload.(FighterEnterPayload); ok {
 			// Clear current action when a new fighter enters
 			m.currentAction = ""
-			if payload.Fighter == "Claude Code" {
-				m.claudeState = FighterActive
-				m.codexState = FighterIdle
+			// Check if it's the implementer or reviewer entering
+			if payload.Fighter == m.implementerName {
+				m.implementerState = FighterActive
+				m.reviewerState = FighterIdle
 				if len(m.rounds) > 0 {
-					m.rounds[len(m.rounds)-1].CurrentPhase = "claude"
+					m.rounds[len(m.rounds)-1].CurrentPhase = "implementer"
 				}
 			} else {
-				// Codex enters - Claude should already be finished via FighterFinish event
-				m.codexState = FighterActive
+				// Reviewer enters - implementer should already be finished via FighterFinish event
+				m.reviewerState = FighterActive
 				if len(m.rounds) > 0 {
-					m.rounds[len(m.rounds)-1].CurrentPhase = "codex"
+					m.rounds[len(m.rounds)-1].CurrentPhase = "reviewer"
 				}
 			}
 		}
@@ -195,17 +233,28 @@ func (m Model) handleEvent(event Event) (tea.Model, tea.Cmd) {
 	case EventFighterAction:
 		if payload, ok := event.Payload.(FighterActionPayload); ok {
 			m.currentAction = payload.Action
+			// Update fighter states based on who is performing the action
+			if payload.Fighter == m.implementerName || payload.Fighter == "Claude Code" {
+				m.implementerState = FighterActive
+				m.reviewerState = FighterIdle
+			} else {
+				m.reviewerState = FighterActive
+				// Only mark implementer as finished if was active
+				if m.implementerState == FighterActive {
+					m.implementerState = FighterFinished
+				}
+			}
 		}
 
 	case EventFighterFinish:
 		if payload, ok := event.Payload.(FighterFinishPayload); ok {
-			if payload.Fighter == "Claude Code" {
-				m.claudeState = FighterFinished
+			if payload.Fighter == m.implementerName || payload.Fighter == "Claude Code" {
+				m.implementerState = FighterFinished
 				if len(m.rounds) > 0 {
 					m.rounds[len(m.rounds)-1].ClaudeDone = true
 				}
 			} else {
-				m.codexState = FighterFinished
+				m.reviewerState = FighterFinished
 				if len(m.rounds) > 0 {
 					m.rounds[len(m.rounds)-1].CodexDone = true
 				}

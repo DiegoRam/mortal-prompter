@@ -2,15 +2,25 @@
 
 > *"FINISH HIM!"* - When your code finally passes code review
 
-A CLI tool that orchestrates an iterative development and code review loop between **Claude Code** and **OpenAI Codex**. Watch as two AI titans battle it out to produce flawless code.
+A CLI tool that orchestrates an iterative development and code review loop between AI coding assistants. Choose your fighters from **Claude Code**, **OpenAI Codex**, or **Google Gemini** and watch them battle it out to produce flawless code.
 
 ## Overview
 
-Mortal Prompter acts as a referee in a code review battle arena:
-- **Claude Code** (Implementer): Executes development tasks and fixes issues
-- **Codex** (Reviewer): Reviews code changes and identifies problems
+Mortal Prompter acts as a referee in a code review battle arena where you choose your fighters:
+- **Implementer**: Executes development tasks and fixes issues
+- **Reviewer**: Reviews code changes and identifies problems
 
-The battle continues until Codex gives a "LGTM" (Looks Good To Me) or the iteration limit is reached.
+### Available Fighters
+
+| Fighter | Description | Can Implement | Can Review |
+|---------|-------------|:-------------:|:----------:|
+| **Claude** | Anthropic's Claude Code CLI | ✅ | ✅ |
+| **Codex** | OpenAI's Codex CLI | ✅ | ✅ |
+| **Gemini** | Google's Gemini CLI | ✅ | ✅ |
+
+By default, **Claude** is the implementer and **Codex** is the reviewer, but you can mix and match any combination!
+
+The battle continues until the reviewer gives a "LGTM" (Looks Good To Me) or the iteration limit is reached.
 
 ## Features
 
@@ -94,8 +104,17 @@ The TUI provides:
 Use `-p` flag or `--no-tui` for non-interactive mode:
 
 ```bash
-# Basic usage
+# Basic usage (Claude implements, Codex reviews)
 mortal-prompter -p "implement user authentication"
+
+# Choose your fighters
+mortal-prompter -p "add feature" --implementer gemini --reviewer claude
+
+# Gemini vs Gemini battle
+mortal-prompter -p "refactor module" --implementer gemini --reviewer gemini
+
+# Codex implements, Claude reviews
+mortal-prompter -p "fix bug" --implementer codex --reviewer claude
 
 # With auto-commit on success
 mortal-prompter -p "add input validation" --auto-commit
@@ -114,7 +133,9 @@ mortal-prompter --version
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
-| `--prompt` | `-p` | Initial prompt for Claude Code | - |
+| `--prompt` | `-p` | Initial prompt for the implementer | - |
+| `--implementer` | - | Fighter for implementation (claude, codex, gemini) | `claude` |
+| `--reviewer` | - | Fighter for code review (claude, codex, gemini) | `codex` |
 | `--dir` | `-d` | Working directory | `.` |
 | `--max-iterations` | `-m` | Max iterations before confirmation | `10` |
 | `--interactive` | `-i` | Prompt for confirmation each round | `false` |
@@ -129,8 +150,34 @@ mortal-prompter --version
 
 Session artifacts are saved to `.mortal-prompter/`:
 
-- `session-{timestamp}.log` - Detailed session log
+- `session-{timestamp}.log` - Detailed session log with the original prompt and all battle activity
 - `report-{timestamp}.md` - Markdown battle report
+
+### Monitoring a Live Session
+
+You can monitor an active battle in real-time from another terminal using `tail -f`:
+
+```bash
+# Watch the latest log file
+tail -f .mortal-prompter/session-*.log
+
+# Or find the most recent one
+tail -f $(ls -t .mortal-prompter/session-*.log | head -1)
+```
+
+This is useful for:
+- **Postmortem analysis**: Review what happened after a session
+- **Live debugging**: Watch the battle unfold in a separate terminal
+- **CI/CD pipelines**: Capture detailed logs for automated runs
+
+### Log Contents
+
+The session log includes:
+- **Original prompt**: The exact prompt provided by the user
+- **Round activity**: Each round's implementation and review details
+- **Git diffs**: Changes made in each iteration
+- **Issues found**: All issues identified by the reviewer
+- **Timing**: Duration of each phase
 
 ### Example CLI Output
 
@@ -186,7 +233,7 @@ make release-dry
 cmd/mortal-prompter/       # CLI entry point
 internal/
 ├── orchestrator/          # Main battle loop between LLMs
-├── fighters/              # Fighter implementations (Claude, Codex)
+├── fighters/              # Fighter implementations (Claude, Codex, Gemini)
 ├── tui/                   # Terminal UI with Bubble Tea
 ├── git/                   # Git operations (diff, commit)
 ├── logger/                # Logging with arcade-style output

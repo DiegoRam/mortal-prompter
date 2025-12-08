@@ -21,7 +21,7 @@ import (
 type Observer interface {
 	OnRoundStart(number int)
 	OnFighterEnter(fighter string)
-	OnFighterAction(action string)
+	OnFighterAction(fighter, action string)
 	OnFighterFinish(fighter string, duration time.Duration)
 	OnChangesDetected(fileCount int)
 	OnIssuesFound(issues []string)
@@ -209,20 +209,25 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 	if o.logger != nil {
 		o.logger.FighterEnter(o.claude.Name())
 		o.logger.FighterAction("Claude Code implementing changes...")
+		o.logger.CLIInput(o.claude.Name(), prompt)
 	}
 	o.notifyFighterEnter(o.claude.Name())
-	o.notifyFighterAction("Claude Code implementing changes...")
+	o.notifyFighterAction("Claude Code", "Implementing changes...")
 
 	claudeStart := time.Now()
 	claudeOutput, err := o.claude.Execute(ctx, prompt)
 	claudeDuration := time.Since(claudeStart)
 
 	if err != nil {
+		if o.logger != nil {
+			o.logger.CLIOutput(o.claude.Name(), claudeOutput)
+		}
 		return nil, fmt.Errorf("claude execution failed: %w", err)
 	}
 
 	round.ClaudeOutput = claudeOutput
 	if o.logger != nil {
+		o.logger.CLIOutput(o.claude.Name(), claudeOutput)
 		o.logger.FighterFinish(o.claude.Name(), claudeDuration)
 	}
 	o.notifyFighterFinish(o.claude.Name(), claudeDuration)
@@ -231,7 +236,7 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 	if o.logger != nil {
 		o.logger.FighterAction("Capturing git diff...")
 	}
-	o.notifyFighterAction("Capturing git diff...")
+	o.notifyFighterAction("Claude Code", "Capturing git diff...")
 
 	// Stage all changes first to capture everything
 	if err := o.git.StageAll(); err != nil {
@@ -244,6 +249,11 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 	}
 
 	round.GitDiff = diff
+
+	// Log the git diff
+	if o.logger != nil {
+		o.logger.GitDiff(diff)
+	}
 
 	// Check if there are any changes
 	if strings.TrimSpace(diff) == "" {
@@ -267,9 +277,10 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 	if o.logger != nil {
 		o.logger.FighterEnter(o.codex.Name())
 		o.logger.FighterAction("Codex reviewing changes...")
+		o.logger.CLIInput(o.codex.Name(), "codex review --uncommitted")
 	}
 	o.notifyFighterEnter(o.codex.Name())
-	o.notifyFighterAction("Codex reviewing changes...")
+	o.notifyFighterAction("Codex", "Reviewing changes...")
 
 	codexStart := time.Now()
 	reviewResult, err := o.codex.Review(ctx, diff)
@@ -280,6 +291,7 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 	}
 
 	if o.logger != nil {
+		o.logger.CLIOutput(o.codex.Name(), reviewResult.RawOutput)
 		o.logger.FighterFinish(o.codex.Name(), codexDuration)
 	}
 	o.notifyFighterFinish(o.codex.Name(), codexDuration)
@@ -450,9 +462,9 @@ func (o *Orchestrator) notifyFighterEnter(fighter string) {
 	}
 }
 
-func (o *Orchestrator) notifyFighterAction(action string) {
+func (o *Orchestrator) notifyFighterAction(fighter, action string) {
 	if o.observer != nil {
-		o.observer.OnFighterAction(action)
+		o.observer.OnFighterAction(fighter, action)
 	}
 }
 

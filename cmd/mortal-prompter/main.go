@@ -188,6 +188,7 @@ func runTUI(cfg *config.Config) error {
 	// Create a new TUI model for battle phase
 	battleModel := tui.NewModel(cfg)
 	battleModel.SetBattleStarted(prompt)
+	battleModel.SetLogFilePath(log.GetLogFilePath())
 
 	// Create observer using the battle model's channels
 	observer := tui.NewChannelObserver(battleModel.GetEventChannel(), battleModel.GetResponseChannel())

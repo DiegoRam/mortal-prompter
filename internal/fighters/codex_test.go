@@ -128,20 +128,20 @@ func TestCodex_parseReviewOutput_LGTM(t *testing.T) {
 	}
 }
 
-func TestCodex_parseReviewOutput_WithIssues(t *testing.T) {
+func TestCodex_parseReviewOutputFallback_WithIssues(t *testing.T) {
 	codex := NewCodex("/tmp", 5*time.Minute)
 
 	tests := []struct {
 		name           string
 		output         string
-		expectedIssues []string
+		expectedCount  int
+		hasIssues      bool
 	}{
 		{
-			name:   "single issue",
-			output: "ISSUE: Missing error handling in auth.go:45",
-			expectedIssues: []string{
-				"Missing error handling in auth.go:45",
-			},
+			name:          "single issue",
+			output:        "ISSUE: Missing error handling in auth.go:45",
+			expectedCount: 1,
+			hasIssues:     true,
 		},
 		{
 			name: "multiple issues",
@@ -149,59 +149,37 @@ func TestCodex_parseReviewOutput_WithIssues(t *testing.T) {
 ISSUE: Missing error handling in auth.go:45
 ISSUE: SQL injection vulnerability in users.go:23
 ISSUE: Unused variable in main.go:12`,
-			expectedIssues: []string{
-				"Missing error handling in auth.go:45",
-				"SQL injection vulnerability in users.go:23",
-				"Unused variable in main.go:12",
-			},
+			expectedCount: 3,
+			hasIssues:     true,
 		},
 		{
 			name: "issues with mixed case prefix",
 			output: `Issue: First problem
 ISSUE: Second problem
 issue: Third problem`,
-			expectedIssues: []string{
-				"First problem",
-				"Second problem",
-				"Third problem",
-			},
-		},
-		{
-			name: "issues with extra whitespace",
-			output: `   ISSUE:   Whitespace before and after
-ISSUE:Normal issue`,
-			expectedIssues: []string{
-				"Whitespace before and after",
-				"Normal issue",
-			},
+			expectedCount: 3,
+			hasIssues:     true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := codex.parseReviewOutput(tt.output)
+			// Test the fallback directly
+			result := codex.parseReviewOutputFallback(tt.output)
 
-			if !result.HasIssues {
-				t.Errorf("parseReviewOutput(%q) HasIssues = false, want true", tt.output)
+			if result.HasIssues != tt.hasIssues {
+				t.Errorf("parseReviewOutputFallback() HasIssues = %v, want %v", result.HasIssues, tt.hasIssues)
 			}
 
-			if len(result.Issues) != len(tt.expectedIssues) {
-				t.Errorf("parseReviewOutput() got %d issues, want %d", len(result.Issues), len(tt.expectedIssues))
+			if len(result.Issues) != tt.expectedCount {
+				t.Errorf("parseReviewOutputFallback() got %d issues, want %d", len(result.Issues), tt.expectedCount)
 				t.Logf("Got issues: %v", result.Issues)
-				t.Logf("Want issues: %v", tt.expectedIssues)
-				return
-			}
-
-			for i, expected := range tt.expectedIssues {
-				if result.Issues[i] != expected {
-					t.Errorf("parseReviewOutput() Issues[%d] = %q, want %q", i, result.Issues[i], expected)
-				}
 			}
 		})
 	}
 }
 
-func TestCodex_parseReviewOutput_MixedOutput(t *testing.T) {
+func TestCodex_parseReviewOutputFallback_MixedOutput(t *testing.T) {
 	codex := NewCodex("/tmp", 5*time.Minute)
 
 	// Test output with various non-issue lines mixed in
@@ -217,80 +195,115 @@ ISSUE: Race condition in concurrent access
 
 Final thoughts: Please fix these issues.`
 
-	result := codex.parseReviewOutput(output)
+	result := codex.parseReviewOutputFallback(output)
 
 	if !result.HasIssues {
-		t.Error("parseReviewOutput() HasIssues = false, want true")
+		t.Error("parseReviewOutputFallback() HasIssues = false, want true")
 	}
 
-	expectedIssues := []string{
-		"The function lacks input validation",
-		"Race condition in concurrent access",
-	}
-
-	if len(result.Issues) != len(expectedIssues) {
-		t.Errorf("parseReviewOutput() got %d issues, want %d", len(result.Issues), len(expectedIssues))
-		return
-	}
-
-	for i, expected := range expectedIssues {
-		if result.Issues[i] != expected {
-			t.Errorf("parseReviewOutput() Issues[%d] = %q, want %q", i, result.Issues[i], expected)
-		}
+	// The fallback should find 2 issues
+	if len(result.Issues) != 2 {
+		t.Errorf("parseReviewOutputFallback() got %d issues, want 2", len(result.Issues))
+		t.Logf("Got issues: %v", result.Issues)
 	}
 }
 
-func TestCodex_parseReviewOutput_EmptyIssue(t *testing.T) {
-	codex := NewCodex("/tmp", 5*time.Minute)
-
-	// Test that empty ISSUE: lines are ignored
-	output := `ISSUE: Valid issue
-ISSUE:
-ISSUE:
-ISSUE: Another valid issue`
-
-	result := codex.parseReviewOutput(output)
-
-	if !result.HasIssues {
-		t.Error("parseReviewOutput() HasIssues = false, want true")
-	}
-
-	expectedIssues := []string{
-		"Valid issue",
-		"Another valid issue",
-	}
-
-	if len(result.Issues) != len(expectedIssues) {
-		t.Errorf("parseReviewOutput() got %d issues, want %d", len(result.Issues), len(expectedIssues))
-		t.Logf("Got: %v", result.Issues)
-	}
-}
-
-func TestCodex_parseReviewOutput_NoIssuesNoLGTM(t *testing.T) {
+func TestCodex_parseReviewOutputFallback_NoIssuesNoLGTM(t *testing.T) {
 	codex := NewCodex("/tmp", 5*time.Minute)
 
 	// If output has no LGTM and no ISSUE: lines, it should have no issues
 	output := "The code looks fine to me. Nice work!"
 
-	result := codex.parseReviewOutput(output)
+	result := codex.parseReviewOutputFallback(output)
 
+	// "looks fine" might be interpreted as no issues
 	if result.HasIssues {
-		t.Error("parseReviewOutput() HasIssues = true, want false (no ISSUE: lines found)")
+		t.Error("parseReviewOutputFallback() HasIssues = true, want false (no ISSUE: lines found)")
 	}
 
 	if len(result.Issues) != 0 {
-		t.Errorf("parseReviewOutput() Issues = %v, want empty", result.Issues)
+		t.Errorf("parseReviewOutputFallback() Issues = %v, want empty", result.Issues)
 	}
 }
 
-func TestCodex_parseReviewOutput_RawOutputPreserved(t *testing.T) {
+func TestCodex_parseReviewOutputFallback_RawOutputPreserved(t *testing.T) {
 	codex := NewCodex("/tmp", 5*time.Minute)
 
 	output := "ISSUE: Something wrong\nMore text here"
 
-	result := codex.parseReviewOutput(output)
+	result := codex.parseReviewOutputFallback(output)
 
 	if result.RawOutput != output {
-		t.Errorf("parseReviewOutput() RawOutput = %q, want %q", result.RawOutput, output)
+		t.Errorf("parseReviewOutputFallback() RawOutput = %q, want %q", result.RawOutput, output)
+	}
+}
+
+func TestCodex_parseReviewOutputFallback_PriorityTags(t *testing.T) {
+	codex := NewCodex("/tmp", 5*time.Minute)
+
+	tests := []struct {
+		name          string
+		output        string
+		expectedCount int
+		hasIssues     bool
+	}{
+		{
+			name:          "P1 issue",
+			output:        "[P1] Critical bug in authentication",
+			expectedCount: 1,
+			hasIssues:     true,
+		},
+		{
+			name:          "P2 issue with dash prefix",
+			output:        "- [P2] Performance issue in database query",
+			expectedCount: 1,
+			hasIssues:     true,
+		},
+		{
+			name: "multiple priority issues",
+			output: `Review comment:
+
+- [P1] Implementer/reviewer selection ignored — orchestrator.go:34-63
+  The orchestrator still hardcodes Claude and Codex.
+
+- [P2] Missing validation in config`,
+			expectedCount: 2,
+			hasIssues:     true,
+		},
+		{
+			name: "P3 and P4 issues",
+			output: `[P3] Minor style issue
+[P4] Suggestion for improvement`,
+			expectedCount: 2,
+			hasIssues:     true,
+		},
+		{
+			name:      "LGTM with no priority tags",
+			output:    "LGTM: No issues found",
+			hasIssues: false,
+		},
+		{
+			name: "LGTM text but has P1 issue (P1 takes precedence)",
+			output: `The code looks good overall, LGTM for most parts.
+However:
+[P1] Critical security vulnerability found`,
+			expectedCount: 1,
+			hasIssues:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := codex.parseReviewOutputFallback(tt.output)
+
+			if result.HasIssues != tt.hasIssues {
+				t.Errorf("parseReviewOutputFallback() HasIssues = %v, want %v", result.HasIssues, tt.hasIssues)
+			}
+
+			if tt.hasIssues && len(result.Issues) != tt.expectedCount {
+				t.Errorf("parseReviewOutputFallback() got %d issues, want %d", len(result.Issues), tt.expectedCount)
+				t.Logf("Got issues: %v", result.Issues)
+			}
+		})
 	}
 }

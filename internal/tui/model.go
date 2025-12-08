@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/diegoram/mortal-prompter/internal/config"
+	"github.com/diegoram/mortal-prompter/internal/fighters"
 	"github.com/diegoram/mortal-prompter/pkg/types"
 )
 
@@ -17,10 +18,19 @@ import (
 type ViewState int
 
 const (
-	ViewPrompt ViewState = iota
+	ViewFighterSelect ViewState = iota
+	ViewPrompt
 	ViewBattle
 	ViewResults
 	ViewConfirmation
+)
+
+// FighterSelectField represents which field is being edited in fighter selection
+type FighterSelectField int
+
+const (
+	FieldImplementer FighterSelectField = iota
+	FieldReviewer
 )
 
 // FighterState represents the state of a fighter during battle
@@ -62,16 +72,24 @@ type Model struct {
 	width  int
 	height int
 
+	// Fighter selection
+	implementerType     fighters.FighterType
+	reviewerType        fighters.FighterType
+	fighterSelectField  FighterSelectField
+	availableFighters   []fighters.FighterType
+
 	// Session data
-	prompt          string
-	rounds          []RoundDisplay
-	currentRound    int
-	claudeState     FighterState
-	codexState      FighterState
-	currentAction   string
-	sessionResult   *types.SessionResult
-	sessionSuccess  bool
-	sessionError    error
+	prompt             string
+	rounds             []RoundDisplay
+	currentRound       int
+	implementerState   FighterState
+	reviewerState      FighterState
+	implementerName    string
+	reviewerName       string
+	currentAction      string
+	sessionResult      *types.SessionResult
+	sessionSuccess     bool
+	sessionError       error
 
 	// Async communication
 	eventChan    chan Event
@@ -92,14 +110,16 @@ type Model struct {
 
 	// Report path
 	reportPath string
+
+	// Log file path
+	logFilePath string
 }
 
 // NewModel creates a new TUI model
 func NewModel(cfg *config.Config) Model {
 	// Initialize textarea for prompt input
 	ta := textarea.New()
-	ta.Placeholder = "Enter your prompt for Claude Code..."
-	ta.Focus()
+	ta.Placeholder = "Enter your prompt for the implementer..."
 	ta.CharLimit = 10000
 	ta.SetWidth(70)
 	ta.SetHeight(8)
@@ -116,18 +136,22 @@ func NewModel(cfg *config.Config) Model {
 	h := help.New()
 
 	return Model{
-		view:         ViewPrompt,
-		config:       cfg,
-		textarea:     ta,
-		spinner:      sp,
-		viewport:     vp,
-		help:         h,
-		keys:         DefaultKeyMap(),
-		rounds:       make([]RoundDisplay, 0),
-		eventChan:    make(chan Event, 100),
-		responseChan: make(chan bool, 1),
-		width:        80,
-		height:       24,
+		view:              ViewFighterSelect,
+		config:            cfg,
+		textarea:          ta,
+		spinner:           sp,
+		viewport:          vp,
+		help:              h,
+		keys:              DefaultKeyMap(),
+		rounds:            make([]RoundDisplay, 0),
+		eventChan:         make(chan Event, 100),
+		responseChan:      make(chan bool, 1),
+		width:             80,
+		height:            24,
+		implementerType:   cfg.Implementer,
+		reviewerType:      cfg.Reviewer,
+		availableFighters: fighters.AllFighterTypes(),
+		fighterSelectField: FieldImplementer,
 	}
 }
 
@@ -164,17 +188,72 @@ func (m *Model) SetBattleStarted(prompt string) {
 	m.battleStarted = true
 	m.view = ViewBattle
 	// Explicitly reset fighter states to WAITING
-	m.claudeState = FighterIdle
-	m.codexState = FighterIdle
+	m.implementerState = FighterIdle
+	m.reviewerState = FighterIdle
 	m.currentRound = 0
 	m.currentAction = ""
 	m.rounds = make([]RoundDisplay, 0)
 	m.startTime = time.Now()
 }
 
+// GetImplementerType returns the selected implementer type
+func (m Model) GetImplementerType() fighters.FighterType {
+	return m.implementerType
+}
+
+// GetReviewerType returns the selected reviewer type
+func (m Model) GetReviewerType() fighters.FighterType {
+	return m.reviewerType
+}
+
+// SetFighterNames sets the display names for the fighters
+func (m *Model) SetFighterNames(implementer, reviewer string) {
+	m.implementerName = implementer
+	m.reviewerName = reviewer
+}
+
 // SetReportPath sets the report path for display in results
 func (m *Model) SetReportPath(path string) {
 	m.reportPath = path
+}
+
+// SetLogFilePath sets the log file path for display in battle view
+func (m *Model) SetLogFilePath(path string) {
+	m.logFilePath = path
+}
+
+// moveFighterSelection moves the fighter selection by delta (-1 or +1)
+func (m *Model) moveFighterSelection(delta int) {
+	if len(m.availableFighters) == 0 {
+		return
+	}
+
+	var currentIdx int
+	var currentType fighters.FighterType
+
+	if m.fighterSelectField == FieldImplementer {
+		currentType = m.implementerType
+	} else {
+		currentType = m.reviewerType
+	}
+
+	// Find current index
+	for i, ft := range m.availableFighters {
+		if ft == currentType {
+			currentIdx = i
+			break
+		}
+	}
+
+	// Calculate new index with wrapping
+	newIdx := (currentIdx + delta + len(m.availableFighters)) % len(m.availableFighters)
+
+	// Update the appropriate field
+	if m.fighterSelectField == FieldImplementer {
+		m.implementerType = m.availableFighters[newIdx]
+	} else {
+		m.reviewerType = m.availableFighters[newIdx]
+	}
 }
 
 // eventMsg wraps an event from the orchestrator

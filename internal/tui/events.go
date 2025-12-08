@@ -40,7 +40,8 @@ type FighterEnterPayload struct {
 
 // FighterActionPayload contains data for fighter action events
 type FighterActionPayload struct {
-	Action string
+	Fighter string
+	Action  string
 }
 
 // FighterFinishPayload contains data for fighter finish events

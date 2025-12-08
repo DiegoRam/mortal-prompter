@@ -11,53 +11,50 @@ import (
 	"github.com/diegoram/mortal-prompter/pkg/types"
 )
 
-// DefaultTimeout is the default timeout for Claude CLI execution.
-const DefaultTimeout = 5 * time.Minute
-
-// Claude represents the Claude Code fighter (the implementer).
-// It wraps the claude CLI tool for executing development tasks.
-type Claude struct {
+// Gemini represents the Gemini CLI fighter.
+// It can act as both implementer and reviewer via the gemini CLI tool.
+type Gemini struct {
 	workDir string
 	timeout time.Duration
 }
 
-// Ensure Claude implements the Fighter interface.
-var _ Fighter = (*Claude)(nil)
+// Ensure Gemini implements the Fighter interface.
+var _ Fighter = (*Gemini)(nil)
 
-// NewClaude creates a new Claude fighter instance.
+// NewGemini creates a new Gemini fighter instance.
 // workDir specifies the working directory for command execution.
 // timeout specifies the maximum duration for command execution.
-func NewClaude(workDir string, timeout time.Duration) *Claude {
+func NewGemini(workDir string, timeout time.Duration) *Gemini {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	return &Claude{
+	return &Gemini{
 		workDir: workDir,
 		timeout: timeout,
 	}
 }
 
-// Name returns the display name of the Claude fighter.
-func (c *Claude) Name() string {
-	return "CLAUDE CODE"
+// Name returns the display name of the Gemini fighter.
+func (g *Gemini) Name() string {
+	return "GEMINI"
 }
 
-// Execute runs Claude Code CLI with the provided prompt and returns the output.
+// Execute runs Gemini CLI with the provided prompt and returns the output.
 // It uses the context for timeout/cancellation support.
-// The command executed is: claude -p "<prompt>" --dangerously-skip-permissions
-func (c *Claude) Execute(ctx context.Context, prompt string) (string, error) {
-	// Check if claude is installed
-	if _, err := exec.LookPath("claude"); err != nil {
-		return "", fmt.Errorf("claude CLI not found in PATH: %w", err)
+// The command executed is: gemini -p "<prompt>"
+func (g *Gemini) Execute(ctx context.Context, prompt string) (string, error) {
+	// Check if gemini is installed
+	if _, err := exec.LookPath("gemini"); err != nil {
+		return "", fmt.Errorf("gemini CLI not found in PATH: %w", err)
 	}
 
 	// Create context with timeout if not already set
-	execCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	execCtx, cancel := context.WithTimeout(ctx, g.timeout)
 	defer cancel()
 
 	// Build and execute the command
-	cmd := exec.CommandContext(execCtx, "claude", "-p", prompt, "--dangerously-skip-permissions")
-	cmd.Dir = c.workDir
+	cmd := exec.CommandContext(execCtx, "gemini", "-p", prompt)
+	cmd.Dir = g.workDir
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -77,60 +74,68 @@ func (c *Claude) Execute(ctx context.Context, prompt string) (string, error) {
 	if err != nil {
 		// Check if context was cancelled or timed out
 		if execCtx.Err() == context.DeadlineExceeded {
-			return combinedOutput, fmt.Errorf("claude execution timed out after %v", c.timeout)
+			return combinedOutput, fmt.Errorf("gemini execution timed out after %v", g.timeout)
 		}
 		if execCtx.Err() == context.Canceled {
-			return combinedOutput, fmt.Errorf("claude execution was cancelled")
+			return combinedOutput, fmt.Errorf("gemini execution was cancelled")
 		}
-		return combinedOutput, fmt.Errorf("claude execution failed: %w", err)
+		return combinedOutput, fmt.Errorf("gemini execution failed: %w", err)
 	}
 
 	return combinedOutput, nil
 }
 
-// BuildPromptWithIssues constructs a prompt for Claude that includes
-// previous issues found during code review.
-// If there are no previous issues, it returns the basePrompt as-is.
-// If there are issues, it builds a structured prompt requesting corrections.
-func (c *Claude) BuildPromptWithIssues(basePrompt string, previousIssues []string) string {
-	if len(previousIssues) == 0 {
-		return basePrompt
-	}
-
-	var sb strings.Builder
-	sb.WriteString("CONTEXTO: Estas en una sesion de code review iterativo.\n\n")
-	sb.WriteString("ISSUES ENCONTRADOS EN LA REVISION ANTERIOR:\n")
-
-	for _, issue := range previousIssues {
-		sb.WriteString("- ")
-		sb.WriteString(issue)
-		sb.WriteString("\n")
-	}
-
-	sb.WriteString("\nTAREA: Corrige los issues mencionados arriba.\n")
-	sb.WriteString("No expliques los cambios, solo implementa las correcciones.\n")
-
-	return sb.String()
-}
-
-// Review executes Claude to review a git diff and returns the parsed review result.
+// Review executes Gemini to review a git diff and returns the parsed review result.
 // It sends the diff as a prompt asking for code review.
-func (c *Claude) Review(ctx context.Context, gitDiff string) (*types.ReviewResult, error) {
-	// Build the review prompt
-	reviewPrompt := c.buildReviewPrompt(gitDiff)
+func (g *Gemini) Review(ctx context.Context, gitDiff string) (*types.ReviewResult, error) {
+	// Check if gemini is installed
+	if _, err := exec.LookPath("gemini"); err != nil {
+		return nil, fmt.Errorf("gemini CLI not found in PATH: %w", err)
+	}
 
-	// Execute Claude with the review prompt
-	output, err := c.Execute(ctx, reviewPrompt)
+	// Create context with timeout if not already set
+	execCtx, cancel := context.WithTimeout(ctx, g.timeout)
+	defer cancel()
+
+	// Build the review prompt
+	reviewPrompt := g.buildReviewPrompt(gitDiff)
+
+	// Build and execute the command
+	cmd := exec.CommandContext(execCtx, "gemini", "-p", reviewPrompt)
+	cmd.Dir = g.workDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	// Combine stdout and stderr for complete output
+	combinedOutput := stdout.String()
+	if stderr.Len() > 0 {
+		if combinedOutput != "" {
+			combinedOutput += "\n"
+		}
+		combinedOutput += stderr.String()
+	}
+
 	if err != nil {
-		return nil, err
+		// Check if context was cancelled or timed out
+		if execCtx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("gemini execution timed out after %v", g.timeout)
+		}
+		if execCtx.Err() == context.Canceled {
+			return nil, fmt.Errorf("gemini execution was cancelled")
+		}
+		return nil, fmt.Errorf("gemini execution failed: %w", err)
 	}
 
 	// Parse the output and return the review result
-	return c.parseReviewOutput(output), nil
+	return g.parseReviewOutput(combinedOutput), nil
 }
 
-// buildReviewPrompt constructs the review prompt for Claude.
-func (c *Claude) buildReviewPrompt(gitDiff string) string {
+// buildReviewPrompt constructs the review prompt for Gemini.
+func (g *Gemini) buildReviewPrompt(gitDiff string) string {
 	return fmt.Sprintf(`Review the following git diff for issues.
 Find real issues: bugs, vulnerabilities, bad practices, missing error handling.
 If NO issues respond "LGTM: No issues found".
@@ -142,7 +147,7 @@ Git diff:
 
 // parseReviewOutput uses an LLM to intelligently parse the review output.
 // This allows handling any review format without rigid pattern matching.
-func (c *Claude) parseReviewOutput(output string) *types.ReviewResult {
+func (g *Gemini) parseReviewOutput(output string) *types.ReviewResult {
 	result := &types.ReviewResult{
 		RawOutput: output,
 		Issues:    []string{},
@@ -165,10 +170,10 @@ REVIEW OUTPUT:
 YOUR RESPONSE:`, output)
 
 	// Execute the parsing prompt
-	parseOutput, err := c.Execute(ctx, parsePrompt)
+	parseOutput, err := g.Execute(ctx, parsePrompt)
 	if err != nil {
 		// Fallback to simple heuristic if LLM call fails
-		return c.parseReviewOutputFallback(output)
+		return g.parseReviewOutputFallback(output)
 	}
 
 	// Parse the LLM's structured response
@@ -197,7 +202,7 @@ YOUR RESPONSE:`, output)
 }
 
 // parseReviewOutputFallback is a simple heuristic fallback when LLM parsing fails.
-func (c *Claude) parseReviewOutputFallback(output string) *types.ReviewResult {
+func (g *Gemini) parseReviewOutputFallback(output string) *types.ReviewResult {
 	result := &types.ReviewResult{
 		RawOutput: output,
 		Issues:    []string{},
@@ -244,12 +249,37 @@ func (c *Claude) parseReviewOutputFallback(output string) *types.ReviewResult {
 	return result
 }
 
-// WorkDir returns the working directory configured for this Claude instance.
-func (c *Claude) WorkDir() string {
-	return c.workDir
+// BuildPromptWithIssues constructs a prompt for Gemini that includes
+// previous issues found during code review.
+// If there are no previous issues, it returns the basePrompt as-is.
+// If there are issues, it builds a structured prompt requesting corrections.
+func (g *Gemini) BuildPromptWithIssues(basePrompt string, previousIssues []string) string {
+	if len(previousIssues) == 0 {
+		return basePrompt
+	}
+
+	var sb strings.Builder
+	sb.WriteString("CONTEXTO: Estas en una sesion de code review iterativo.\n\n")
+	sb.WriteString("ISSUES ENCONTRADOS EN LA REVISION ANTERIOR:\n")
+
+	for _, issue := range previousIssues {
+		sb.WriteString("- ")
+		sb.WriteString(issue)
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\nTAREA: Corrige los issues mencionados arriba.\n")
+	sb.WriteString("No expliques los cambios, solo implementa las correcciones.\n")
+
+	return sb.String()
 }
 
-// Timeout returns the timeout configured for this Claude instance.
-func (c *Claude) Timeout() time.Duration {
-	return c.timeout
+// WorkDir returns the working directory configured for this Gemini instance.
+func (g *Gemini) WorkDir() string {
+	return g.workDir
+}
+
+// Timeout returns the timeout configured for this Gemini instance.
+func (g *Gemini) Timeout() time.Duration {
+	return g.timeout
 }

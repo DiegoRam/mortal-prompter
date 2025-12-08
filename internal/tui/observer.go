@@ -12,7 +12,7 @@ import (
 type Observer interface {
 	OnRoundStart(number int)
 	OnFighterEnter(fighter string)
-	OnFighterAction(action string)
+	OnFighterAction(fighter, action string)
 	OnFighterFinish(fighter string, duration time.Duration)
 	OnChangesDetected(fileCount int)
 	OnIssuesFound(issues []string)
@@ -53,10 +53,10 @@ func (o *ChannelObserver) OnFighterEnter(fighter string) {
 }
 
 // OnFighterAction sends a fighter action event
-func (o *ChannelObserver) OnFighterAction(action string) {
+func (o *ChannelObserver) OnFighterAction(fighter, action string) {
 	o.eventChan <- Event{
 		Type:    EventFighterAction,
-		Payload: FighterActionPayload{Action: action},
+		Payload: FighterActionPayload{Fighter: fighter, Action: action},
 	}
 }
 
