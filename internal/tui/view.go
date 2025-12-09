@@ -250,11 +250,16 @@ func (m Model) viewBattle() string {
 		strings.Repeat(" ", W-2*colWidth-2-1)
 	sb.WriteString("║" + line2 + "║\n")
 
-	// Status line
+	// Status line - use blinking effect for "FIGHTING" state
 	var implementerStatusStyled, reviewerStatusStyled string
 	switch m.implementerState {
 	case FighterActive:
-		implementerStatusStyled = activeStyle.Render(implementerStatusText)
+		// Use blinking style for active fighter
+		if m.blinkOn {
+			implementerStatusStyled = FightingBlinkOnStyle.Render(implementerStatusText)
+		} else {
+			implementerStatusStyled = FightingBlinkOffStyle.Render(implementerStatusText)
+		}
 	case FighterFinished:
 		implementerStatusStyled = infoStyle.Render(implementerStatusText)
 	default:
@@ -263,7 +268,12 @@ func (m Model) viewBattle() string {
 
 	switch m.reviewerState {
 	case FighterActive:
-		reviewerStatusStyled = activeStyle.Render(reviewerStatusText)
+		// Use blinking style for active fighter
+		if m.blinkOn {
+			reviewerStatusStyled = FightingBlinkOnStyle.Render(reviewerStatusText)
+		} else {
+			reviewerStatusStyled = FightingBlinkOffStyle.Render(reviewerStatusText)
+		}
 	case FighterFinished:
 		reviewerStatusStyled = infoStyle.Render(reviewerStatusText)
 	default:

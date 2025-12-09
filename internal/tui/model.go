@@ -113,7 +113,15 @@ type Model struct {
 
 	// Log file path
 	logFilePath string
+
+	// Blink animation state for "FIGHTING" text
+	blinkOn      bool
+	blinkCounter int
 }
+
+// blinkInterval defines how many ticks before toggling blink state
+// At 100ms tick rate, 5 ticks = 500ms per blink state
+const blinkInterval = 5
 
 // NewModel creates a new TUI model
 func NewModel(cfg *config.Config) Model {

@@ -120,4 +120,13 @@ var (
 			Bold(true).
 			Foreground(ColorRed).
 			Align(lipgloss.Center)
+
+	// Blink styles for "FIGHTING" text
+	FightingBlinkOnStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(ColorGreen)
+
+	FightingBlinkOffStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#007700")) // Darker green for blink-off state
 )

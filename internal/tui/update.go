@@ -30,6 +30,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Periodic tick to ensure UI updates - continue ticking only during battle
 		if m.view == ViewBattle {
+			// Update blink animation counter
+			m.blinkCounter++
+			if m.blinkCounter >= blinkInterval {
+				m.blinkOn = !m.blinkOn
+				m.blinkCounter = 0
+			}
 			return m, tick()
 		}
 		return m, nil
