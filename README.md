@@ -51,6 +51,10 @@ User provides prompt
   FLAWLESS VICTORY
 ```
 
+
+<img width="410" height="689" alt="image" src="https://github.com/user-attachments/assets/fb99a937-980d-458e-98f0-d660d290f4ae" />
+
+
 ## Installation
 
 ### Prerequisites
