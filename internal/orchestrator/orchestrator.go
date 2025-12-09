@@ -47,6 +47,9 @@ type Orchestrator struct {
 	currentRound int
 	state        types.SessionState
 	startTime    time.Time
+
+	// Image path for multimodal prompts (only used in first round)
+	imagePath string
 }
 
 // New creates a new Orchestrator instance with the provided configuration and logger.
@@ -73,6 +76,11 @@ func NewWithObserver(cfg *config.Config, log *logger.Logger, observer Observer) 
 // SetPrompt allows setting the prompt after creation (for TUI mode)
 func (o *Orchestrator) SetPrompt(prompt string) {
 	o.config.Prompt = prompt
+}
+
+// SetImagePath sets the image path for multimodal prompts (only used in first round)
+func (o *Orchestrator) SetImagePath(imagePath string) {
+	o.imagePath = imagePath
 }
 
 // Run executes the main battle loop and returns the session result.
@@ -214,8 +222,17 @@ func (o *Orchestrator) executeRound(ctx context.Context, number int, basePrompt 
 	o.notifyFighterEnter(o.claude.Name())
 	o.notifyFighterAction("Claude Code", "Implementing changes...")
 
+	// Only pass image path on first round (subsequent rounds focus on issues)
+	imagePath := ""
+	if number == 1 && o.imagePath != "" {
+		imagePath = o.imagePath
+		if o.logger != nil {
+			o.logger.Info(fmt.Sprintf("Including image: %s", imagePath))
+		}
+	}
+
 	claudeStart := time.Now()
-	claudeOutput, err := o.claude.Execute(ctx, prompt)
+	claudeOutput, err := o.claude.Execute(ctx, prompt, imagePath)
 	claudeDuration := time.Since(claudeStart)
 
 	if err != nil {

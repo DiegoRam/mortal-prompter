@@ -143,6 +143,25 @@ func (m Model) viewPrompt() string {
 	sb.WriteString("═══════════════════════════════════════════════════════════════════════════")
 	sb.WriteString("\n\n")
 
+	// Image attachment indicator
+	if m.attachedImage != nil {
+		sb.WriteString("  ")
+		sb.WriteString(ImageAttachedStyle.Render("[IMAGE ATTACHED]"))
+		sb.WriteString(" ")
+		imageInfo := fmt.Sprintf("%dx%d PNG", m.attachedImage.Width, m.attachedImage.Height)
+		sb.WriteString(ImageInfoStyle.Render(imageInfo))
+		sb.WriteString("\n")
+		sb.WriteString(HelpStyle.Render("  ctrl+x: remove image"))
+		sb.WriteString("\n\n")
+	}
+
+	// Show temporary image message if any
+	if m.imageMessage != "" {
+		sb.WriteString("  ")
+		sb.WriteString(InfoStyle.Render(m.imageMessage))
+		sb.WriteString("\n\n")
+	}
+
 	// Prompt label
 	sb.WriteString(TitleStyle.Render("  Enter your prompt for Claude Code:"))
 	sb.WriteString("\n\n")
@@ -152,8 +171,9 @@ func (m Model) viewPrompt() string {
 	sb.WriteString(m.textarea.View())
 	sb.WriteString("\n\n")
 
-	// Help
-	sb.WriteString(HelpStyle.Render("  ctrl+s: submit  •  ctrl+c: quit"))
+	// Help - include paste image hint
+	helpText := "  ctrl+s: submit  •  ctrl+v: paste image  •  ctrl+c: quit"
+	sb.WriteString(HelpStyle.Render(helpText))
 	sb.WriteString("\n")
 
 	return sb.String()
@@ -290,6 +310,14 @@ func (m Model) viewBattle() string {
 
 	// Prompt section
 	if m.prompt != "" {
+		// Show image indicator if attached
+		if m.attachedImage != nil {
+			imgLabel := " [+IMG] "
+			imgLabelWidth := len(imgLabel)
+			styledImgLabel := ImageAttachedStyle.Render(imgLabel)
+			sb.WriteString(padLine(styledImgLabel, imgLabelWidth))
+		}
+
 		promptLabel := " PROMPT: "
 		promptLabelWidth := len(promptLabel)
 		styledLabel := warningStyle.Render(promptLabel)

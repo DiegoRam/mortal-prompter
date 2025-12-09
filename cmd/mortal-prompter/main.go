@@ -181,6 +181,9 @@ func runTUI(cfg *config.Config) error {
 		return nil
 	}
 
+	// Get image path if one was attached
+	imagePath := m.GetImagePath()
+
 	// Now run the actual battle (TUI was just for input)
 	// Set the prompt in config
 	cfg.Prompt = prompt
@@ -198,6 +201,12 @@ func runTUI(cfg *config.Config) error {
 
 	// Create orchestrator with observer
 	orch := orchestrator.NewWithObserver(cfg, log, observer)
+
+	// Set image path if one was attached
+	if imagePath != "" {
+		orch.SetImagePath(imagePath)
+		log.Info(fmt.Sprintf("Image attached: %s", imagePath))
+	}
 
 	// Run orchestrator in goroutine
 	var result *types.SessionResult

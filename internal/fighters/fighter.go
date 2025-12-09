@@ -31,8 +31,9 @@ type Fighter interface {
 // Implementer is the interface for fighters that can implement code changes.
 type Implementer interface {
 	Fighter
-	// Execute runs the fighter with the provided prompt and returns the output.
-	Execute(ctx context.Context, prompt string) (string, error)
+	// Execute runs the fighter with the provided prompt and optional image path.
+	// If imagePath is not empty, the image will be included in the prompt.
+	Execute(ctx context.Context, prompt string, imagePath string) (string, error)
 	// BuildPromptWithIssues constructs a prompt that includes previous issues.
 	BuildPromptWithIssues(basePrompt string, previousIssues []string) string
 }

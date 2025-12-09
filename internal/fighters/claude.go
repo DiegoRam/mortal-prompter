@@ -42,10 +42,11 @@ func (c *Claude) Name() string {
 	return "CLAUDE CODE"
 }
 
-// Execute runs Claude Code CLI with the provided prompt and returns the output.
+// Execute runs Claude Code CLI with the provided prompt and optional image path.
 // It uses the context for timeout/cancellation support.
 // The command executed is: claude -p "<prompt>" --dangerously-skip-permissions
-func (c *Claude) Execute(ctx context.Context, prompt string) (string, error) {
+// If imagePath is provided, it is included in the prompt for Claude to analyze.
+func (c *Claude) Execute(ctx context.Context, prompt string, imagePath string) (string, error) {
 	// Check if claude is installed
 	if _, err := exec.LookPath("claude"); err != nil {
 		return "", fmt.Errorf("claude CLI not found in PATH: %w", err)
@@ -55,8 +56,15 @@ func (c *Claude) Execute(ctx context.Context, prompt string) (string, error) {
 	execCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
+	// If image path is provided, include it in the prompt
+	// Claude Code can read images when provided as file paths
+	finalPrompt := prompt
+	if imagePath != "" {
+		finalPrompt = fmt.Sprintf("%s\n\n[Image attached: %s]", prompt, imagePath)
+	}
+
 	// Build and execute the command
-	cmd := exec.CommandContext(execCtx, "claude", "-p", prompt, "--dangerously-skip-permissions")
+	cmd := exec.CommandContext(execCtx, "claude", "-p", finalPrompt, "--dangerously-skip-permissions")
 	cmd.Dir = c.workDir
 
 	var stdout, stderr bytes.Buffer
@@ -119,8 +127,8 @@ func (c *Claude) Review(ctx context.Context, gitDiff string) (*types.ReviewResul
 	// Build the review prompt
 	reviewPrompt := c.buildReviewPrompt(gitDiff)
 
-	// Execute Claude with the review prompt
-	output, err := c.Execute(ctx, reviewPrompt)
+	// Execute Claude with the review prompt (no image for reviews)
+	output, err := c.Execute(ctx, reviewPrompt, "")
 	if err != nil {
 		return nil, err
 	}
@@ -164,8 +172,8 @@ REVIEW OUTPUT:
 
 YOUR RESPONSE:`, output)
 
-	// Execute the parsing prompt
-	parseOutput, err := c.Execute(ctx, parsePrompt)
+	// Execute the parsing prompt (no image for parsing)
+	parseOutput, err := c.Execute(ctx, parsePrompt, "")
 	if err != nil {
 		// Fallback to simple heuristic if LLM call fails
 		return c.parseReviewOutputFallback(output)

@@ -53,6 +53,15 @@ type RoundDisplay struct {
 	CurrentPhase string // "claude", "codex", "diff"
 }
 
+// ImageAttachment holds data about an attached clipboard image
+type ImageAttachment struct {
+	Data     []byte    // PNG image data
+	FilePath string    // Path where image is saved
+	Width    int       // Image width in pixels
+	Height   int       // Image height in pixels
+	AddedAt  time.Time // When the image was pasted
+}
+
 // Model is the main bubbletea model for the TUI
 type Model struct {
 	// View state
@@ -90,6 +99,10 @@ type Model struct {
 	sessionResult      *types.SessionResult
 	sessionSuccess     bool
 	sessionError       error
+
+	// Image attachment
+	attachedImage *ImageAttachment
+	imageMessage  string // Temporary message about image operations
 
 	// Async communication
 	eventChan    chan Event
@@ -228,6 +241,19 @@ func (m *Model) SetReportPath(path string) {
 // SetLogFilePath sets the log file path for display in battle view
 func (m *Model) SetLogFilePath(path string) {
 	m.logFilePath = path
+}
+
+// GetImagePath returns the path to the attached image, or empty string if none
+func (m Model) GetImagePath() string {
+	if m.attachedImage != nil {
+		return m.attachedImage.FilePath
+	}
+	return ""
+}
+
+// HasImage returns true if an image is attached
+func (m Model) HasImage() bool {
+	return m.attachedImage != nil
 }
 
 // moveFighterSelection moves the fighter selection by delta (-1 or +1)

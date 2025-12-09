@@ -39,10 +39,11 @@ func (g *Gemini) Name() string {
 	return "GEMINI"
 }
 
-// Execute runs Gemini CLI with the provided prompt and returns the output.
+// Execute runs Gemini CLI with the provided prompt and optional image path.
 // It uses the context for timeout/cancellation support.
 // The command executed is: gemini -p "<prompt>"
-func (g *Gemini) Execute(ctx context.Context, prompt string) (string, error) {
+// If imagePath is provided, it is referenced using Gemini's @ syntax.
+func (g *Gemini) Execute(ctx context.Context, prompt string, imagePath string) (string, error) {
 	// Check if gemini is installed
 	if _, err := exec.LookPath("gemini"); err != nil {
 		return "", fmt.Errorf("gemini CLI not found in PATH: %w", err)
@@ -52,8 +53,14 @@ func (g *Gemini) Execute(ctx context.Context, prompt string) (string, error) {
 	execCtx, cancel := context.WithTimeout(ctx, g.timeout)
 	defer cancel()
 
+	// If image path is provided, use Gemini's @ syntax for file references
+	finalPrompt := prompt
+	if imagePath != "" {
+		finalPrompt = fmt.Sprintf("%s @%s", prompt, imagePath)
+	}
+
 	// Build and execute the command
-	cmd := exec.CommandContext(execCtx, "gemini", "-p", prompt)
+	cmd := exec.CommandContext(execCtx, "gemini", "-p", finalPrompt)
 	cmd.Dir = g.workDir
 
 	var stdout, stderr bytes.Buffer
@@ -169,8 +176,8 @@ REVIEW OUTPUT:
 
 YOUR RESPONSE:`, output)
 
-	// Execute the parsing prompt
-	parseOutput, err := g.Execute(ctx, parsePrompt)
+	// Execute the parsing prompt (no image for parsing)
+	parseOutput, err := g.Execute(ctx, parsePrompt, "")
 	if err != nil {
 		// Fallback to simple heuristic if LLM call fails
 		return g.parseReviewOutputFallback(output)

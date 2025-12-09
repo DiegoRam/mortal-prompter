@@ -114,8 +114,8 @@ REVIEW OUTPUT:
 
 YOUR RESPONSE:`, output)
 
-	// Execute the parsing prompt
-	parseOutput, err := c.Execute(ctx, parsePrompt)
+	// Execute the parsing prompt (no image for parsing)
+	parseOutput, err := c.Execute(ctx, parsePrompt, "")
 	if err != nil {
 		// Fallback to simple heuristic if LLM call fails
 		return c.parseReviewOutputFallback(output)
@@ -194,9 +194,10 @@ func (c *Codex) parseReviewOutputFallback(output string) *types.ReviewResult {
 	return result
 }
 
-// Execute runs Codex CLI with the provided prompt and returns the output.
+// Execute runs Codex CLI with the provided prompt and optional image path.
 // It uses the context for timeout/cancellation support.
-func (c *Codex) Execute(ctx context.Context, prompt string) (string, error) {
+// If imagePath is provided, it is passed via the --image flag.
+func (c *Codex) Execute(ctx context.Context, prompt string, imagePath string) (string, error) {
 	// Check if codex is installed
 	if _, err := exec.LookPath("codex"); err != nil {
 		return "", fmt.Errorf("codex CLI not found in PATH: %w", err)
@@ -206,8 +207,15 @@ func (c *Codex) Execute(ctx context.Context, prompt string) (string, error) {
 	execCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
+	// Build command args
+	args := []string{"-p", prompt}
+	if imagePath != "" {
+		// Codex uses --image flag for image input
+		args = append(args, "--image", imagePath)
+	}
+
 	// Build and execute the command
-	cmd := exec.CommandContext(execCtx, "codex", "-p", prompt)
+	cmd := exec.CommandContext(execCtx, "codex", args...)
 	cmd.Dir = c.workDir
 
 	var stdout, stderr bytes.Buffer

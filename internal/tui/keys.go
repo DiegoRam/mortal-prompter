@@ -4,17 +4,19 @@ import "github.com/charmbracelet/bubbles/key"
 
 // KeyMap defines the key bindings for the TUI
 type KeyMap struct {
-	Submit    key.Binding
-	Quit      key.Binding
-	Cancel    key.Binding
-	Help      key.Binding
-	Details   key.Binding
-	ViewDiff  key.Binding
-	ViewReport key.Binding
-	Confirm   key.Binding
-	Deny      key.Binding
-	Up        key.Binding
-	Down      key.Binding
+	Submit      key.Binding
+	Quit        key.Binding
+	Cancel      key.Binding
+	Help        key.Binding
+	Details     key.Binding
+	ViewDiff    key.Binding
+	ViewReport  key.Binding
+	Confirm     key.Binding
+	Deny        key.Binding
+	Up          key.Binding
+	Down        key.Binding
+	PasteImage  key.Binding
+	RemoveImage key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings
@@ -63,6 +65,14 @@ func DefaultKeyMap() KeyMap {
 		Down: key.NewBinding(
 			key.WithKeys("down", "j"),
 			key.WithHelp("j", "down"),
+		),
+		PasteImage: key.NewBinding(
+			key.WithKeys("ctrl+v"),
+			key.WithHelp("ctrl+v", "paste image"),
+		),
+		RemoveImage: key.NewBinding(
+			key.WithKeys("ctrl+x"),
+			key.WithHelp("ctrl+x", "remove image"),
 		),
 	}
 }

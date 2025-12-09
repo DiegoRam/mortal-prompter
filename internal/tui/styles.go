@@ -129,4 +129,12 @@ var (
 	FightingBlinkOffStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("#007700")) // Darker green for blink-off state
+
+	// Image attachment styles
+	ImageAttachedStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(ColorMagenta)
+
+	ImageInfoStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FF69B4")) // Hot pink for image info
 )

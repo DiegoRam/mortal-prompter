@@ -1,9 +1,13 @@
 package tui
 
 import (
+	"time"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/diegoram/mortal-prompter/internal/clipboard"
 )
 
 // Update handles messages and updates the model
@@ -52,6 +56,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessionResult = msg.result
 		m.sessionSuccess = msg.success
 		m.sessionError = msg.err
+		return m, nil
+
+	case clearImageMessageMsg:
+		m.imageMessage = ""
 		return m, nil
 	}
 
@@ -144,12 +152,87 @@ func (m Model) handlePromptKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.battleStarted = true
 		return m, tea.Quit
 
+	// Handle Ctrl+V for paste image
+	case key.Matches(msg, m.keys.PasteImage):
+		return m.handleImagePaste()
+
+	// Handle Ctrl+X for remove image
+	case key.Matches(msg, m.keys.RemoveImage):
+		return m.handleImageRemove()
+
 	default:
 		var cmd tea.Cmd
 		m.textarea, cmd = m.textarea.Update(msg)
 		return m, cmd
 	}
 }
+
+// handleImagePaste reads an image from the clipboard and attaches it
+func (m Model) handleImagePaste() (tea.Model, tea.Cmd) {
+	// Clear any previous message
+	m.imageMessage = ""
+
+	// Try to read image from clipboard
+	imgData, err := clipboard.ReadImage()
+	if err != nil {
+		if err == clipboard.ErrNoImageInClipboard {
+			m.imageMessage = "No image found in clipboard"
+		} else {
+			m.imageMessage = "Failed to read clipboard: " + err.Error()
+		}
+		// Clear message after a delay
+		return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+			return clearImageMessageMsg{}
+		})
+	}
+
+	// Save image to temp file in output directory
+	outputDir := m.config.OutputDir
+	if outputDir == "" {
+		outputDir = ".mortal-prompter"
+	}
+
+	filePath, err := clipboard.SaveToFile(imgData.Data, outputDir)
+	if err != nil {
+		m.imageMessage = "Failed to save image: " + err.Error()
+		return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+			return clearImageMessageMsg{}
+		})
+	}
+
+	// Store the attachment
+	m.attachedImage = &ImageAttachment{
+		Data:     imgData.Data,
+		FilePath: filePath,
+		Width:    imgData.Width,
+		Height:   imgData.Height,
+		AddedAt:  time.Now(),
+	}
+
+	m.imageMessage = "Image attached successfully!"
+	return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+		return clearImageMessageMsg{}
+	})
+}
+
+// handleImageRemove removes the attached image
+func (m Model) handleImageRemove() (tea.Model, tea.Cmd) {
+	if m.attachedImage == nil {
+		m.imageMessage = "No image attached"
+		return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+			return clearImageMessageMsg{}
+		})
+	}
+
+	m.attachedImage = nil
+	m.imageMessage = "Image removed"
+	return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+		return clearImageMessageMsg{}
+	})
+}
+
+// clearImageMessageMsg is sent to clear the temporary image message
+type clearImageMessageMsg struct{}
 
 // handleBattleKeys handles keys in the battle view
 func (m Model) handleBattleKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
