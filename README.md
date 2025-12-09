@@ -1,5 +1,10 @@
 # Mortal Prompter
 
+<img width="591" height="291" alt="image" src="https://github.com/user-attachments/assets/d7269d78-eef3-45c0-94c1-83c4903cfd89" />
+
+<img width="410" height="689" alt="image" src="https://github.com/user-attachments/assets/fb99a937-980d-458e-98f0-d660d290f4ae" />
+
+
 > *"FINISH HIM!"* - When your code finally passes code review
 
 A CLI tool that orchestrates an iterative development and code review loop between AI coding assistants. Choose your fighters from **Claude Code**, **OpenAI Codex**, or **Google Gemini** and watch them battle it out to produce flawless code.
