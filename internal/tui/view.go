@@ -53,6 +53,19 @@ func (m Model) viewFighterSelect() string {
 
 	sb.WriteString(TitleStyle.Render(banner))
 	sb.WriteString("\n\n")
+
+	// Working directory display
+	if m.config != nil && m.config.WorkDir != "" {
+		workDir := m.config.WorkDir
+		// Truncate if too long (keep end of path which is more meaningful)
+		maxLen := 60
+		if len(workDir) > maxLen {
+			workDir = "..." + workDir[len(workDir)-maxLen+3:]
+		}
+		sb.WriteString(HelpStyle.Render("  📁 Working Directory: " + workDir))
+		sb.WriteString("\n\n")
+	}
+
 	sb.WriteString(SuccessStyle.Render("                         CHOOSE YOUR FIGHTERS!"))
 	sb.WriteString("\n\n")
 	sb.WriteString("═══════════════════════════════════════════════════════════════════════════")
@@ -411,6 +424,22 @@ func (m Model) viewBattle() string {
 		logWidth := len(logLine)
 		styledLog := " " + waitingStyle.Render("LOG:") + " " + waitingStyle.Render(logPath)
 		sb.WriteString(padLine(styledLog, logWidth))
+		sb.WriteString(midBorder + "\n")
+	}
+
+	// Working directory
+	if m.config != nil && m.config.WorkDir != "" {
+		dirLabel := " DIR: "
+		// Truncate path if too long
+		maxPathLen := W - len(dirLabel) - 2
+		dirPath := m.config.WorkDir
+		if len(dirPath) > maxPathLen {
+			dirPath = "..." + dirPath[len(dirPath)-maxPathLen+3:]
+		}
+		dirLine := dirLabel + dirPath
+		dirWidth := len(dirLine)
+		styledDir := " " + waitingStyle.Render("DIR:") + " " + waitingStyle.Render(dirPath)
+		sb.WriteString(padLine(styledDir, dirWidth))
 		sb.WriteString(midBorder + "\n")
 	}
 
