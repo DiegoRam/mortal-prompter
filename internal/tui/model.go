@@ -130,6 +130,11 @@ type Model struct {
 	// Blink animation state for "FIGHTING" text
 	blinkOn      bool
 	blinkCounter int
+
+	// Fighter animation state
+	animFrame        int  // Current animation frame index
+	leftAttacking    bool // Left fighter is attacking
+	rightAttacking   bool // Right fighter is attacking
 }
 
 // blinkInterval defines how many ticks before toggling blink state

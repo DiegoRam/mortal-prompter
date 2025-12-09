@@ -40,6 +40,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.blinkOn = !m.blinkOn
 				m.blinkCounter = 0
 			}
+			// Update fighter animation frame (cycle through frames)
+			m.animFrame = (m.animFrame + 1) % 6
+			// Set attacking state based on which fighter is active
+			m.leftAttacking = m.implementerState == FighterActive
+			m.rightAttacking = m.reviewerState == FighterActive
 			return m, tick()
 		}
 		return m, nil

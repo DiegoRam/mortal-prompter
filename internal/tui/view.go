@@ -202,6 +202,11 @@ func (m Model) viewBattle() string {
 	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF"))
 	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
 
+	// Fighter sprite styles
+	leftFighterColor := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Bold(true)
+	rightFighterColor := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6600")).Bold(true)
+	impactStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00")).Bold(true)
+
 	var sb strings.Builder
 
 	// Box width (display characters, not bytes)
@@ -268,20 +273,17 @@ func (m Model) viewBattle() string {
 	implementerNameStyled := fighterStyle.Render(implementerName)
 	reviewerNameStyled := fighterStyle.Render(reviewerName)
 
-	line1 := " " + implementerNameStyled + strings.Repeat(" ", colWidth-1-len(implementerName)) +
-		"VS" +
-		strings.Repeat(" ", colWidth-len(reviewerName)) + reviewerNameStyled +
-		strings.Repeat(" ", W-2*colWidth-2-1)
-	sb.WriteString("║" + line1 + "║\n")
+	// Build fighter names line with proper alignment
+	// Layout: [space][name][padding][VS][padding][name][space]
+	vsText := "VS"
+	leftPad := (W - len(implementerName) - len(vsText) - len(reviewerName)) / 3
+	rightPad := W - len(implementerName) - leftPad - len(vsText) - leftPad - len(reviewerName)
 
-	// Health bars line
-	barPlain := "[##########]"
-	barStyled := activeStyle.Render(barPlain)
-	line2 := " " + barStyled + strings.Repeat(" ", colWidth-1-len(barPlain)) +
-		"  " +
-		strings.Repeat(" ", colWidth-len(barPlain)) + barStyled +
-		strings.Repeat(" ", W-2*colWidth-2-1)
-	sb.WriteString("║" + line2 + "║\n")
+	line1 := implementerNameStyled + strings.Repeat(" ", leftPad) +
+		vsText +
+		strings.Repeat(" ", leftPad) + reviewerNameStyled +
+		strings.Repeat(" ", rightPad)
+	sb.WriteString("║" + line1 + "║\n")
 
 	// Status line - use blinking effect for "FIGHTING" state
 	var implementerStatusStyled, reviewerStatusStyled string
@@ -313,11 +315,75 @@ func (m Model) viewBattle() string {
 		reviewerStatusStyled = waitingStyle.Render(reviewerStatusText)
 	}
 
-	line3 := " " + implementerStatusStyled + strings.Repeat(" ", colWidth-1-len(implementerStatusText)) +
+	// Status line with same alignment as names
+	statusLeftPad := (W - len(implementerStatusText) - 2 - len(reviewerStatusText)) / 3
+	statusRightPad := W - len(implementerStatusText) - statusLeftPad - 2 - statusLeftPad - len(reviewerStatusText)
+
+	line3 := implementerStatusStyled + strings.Repeat(" ", statusLeftPad) +
 		"  " +
-		strings.Repeat(" ", colWidth-len(reviewerStatusText)) + reviewerStatusStyled +
-		strings.Repeat(" ", W-2*colWidth-2-1)
+		strings.Repeat(" ", statusLeftPad) + reviewerStatusStyled +
+		strings.Repeat(" ", statusRightPad)
 	sb.WriteString("║" + line3 + "║\n")
+
+	// === ANIMATED FIGHTER SPRITES ===
+	// Get current animation frames based on state
+	leftFrames := m.getLeftFighterFrames()
+	rightFrames := m.getRightFighterFrames()
+
+	// Select frame based on animation counter
+	leftFrameIdx := (m.animFrame / 2) % len(leftFrames)
+	rightFrameIdx := (m.animFrame / 2) % len(rightFrames)
+
+	leftSprite := leftFrames[leftFrameIdx]
+	rightSprite := rightFrames[rightFrameIdx]
+
+	// Get impact effect if both are fighting
+	showImpact := m.leftAttacking && m.rightAttacking
+
+	// Render fighter arena (5 lines for fighters)
+	const fighterWidth = 12
+	const gapWidth = W - 2*fighterWidth // gap between fighters
+
+	for i := range leftSprite {
+		leftLine := leftSprite[i]
+		rightLine := rightSprite[i]
+
+		// Pad sprites to fixed width
+		for len(leftLine) < fighterWidth {
+			leftLine += " "
+		}
+		for len(rightLine) < fighterWidth {
+			rightLine = " " + rightLine
+		}
+
+		// Build the arena line
+		var arenaLine string
+
+		// Add impact effects in the middle during combat
+		if showImpact && i == 1 && m.blinkOn {
+			// Both fighters attacking - show clash!
+			impact := impactStyle.Render("*CLASH*")
+			impactLen := 7
+			impactPad := (gapWidth - impactLen) / 2
+			gap := strings.Repeat(" ", impactPad) + impact + strings.Repeat(" ", gapWidth-impactPad-impactLen)
+			arenaLine = leftFighterColor.Render(leftLine) + gap + rightFighterColor.Render(rightLine)
+		} else if m.leftAttacking && i == 1 && m.blinkOn {
+			// Left attacking effect - show punch!
+			effect := impactStyle.Render(">>>*")
+			arenaLine = leftFighterColor.Render(leftLine) + effect + strings.Repeat(" ", gapWidth-4) + rightFighterColor.Render(rightLine)
+		} else if m.rightAttacking && i == 1 && m.blinkOn {
+			// Right attacking effect - show punch!
+			effect := impactStyle.Render("*<<<")
+			arenaLine = leftFighterColor.Render(leftLine) + strings.Repeat(" ", gapWidth-4) + effect + rightFighterColor.Render(rightLine)
+		} else {
+			gap := strings.Repeat(" ", gapWidth)
+			arenaLine = leftFighterColor.Render(leftLine) + gap + rightFighterColor.Render(rightLine)
+		}
+
+		// Calculate actual display width (without ANSI codes)
+		displayWidth := fighterWidth + gapWidth + fighterWidth
+		sb.WriteString(padLine(arenaLine, displayWidth))
+	}
 
 	sb.WriteString(midBorder + "\n")
 
@@ -459,25 +525,28 @@ func (m Model) viewBattle() string {
 func (m Model) viewResults() string {
 	var sb strings.Builder
 
+	// Box width = 60 characters inside (between ║ borders)
+	const boxW = 60
+
 	if m.sessionSuccess {
-		// Victory banner
+		// Victory banner - each line is exactly 60 chars inside
 		victory := `
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
-║     ██╗   ██╗██╗ ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗║
-║     ██║   ██║██║██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝║
-║     ██║   ██║██║██║        ██║   ██║   ██║██████╔╝ ╚████╔╝ ║
-║     ╚██╗ ██╔╝██║██║        ██║   ██║   ██║██╔══██╗  ╚██╔╝  ║
-║      ╚████╔╝ ██║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║   ║
-║       ╚═══╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ║
+║    ██╗   ██╗██╗ ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗ ║
+║    ██║   ██║██║██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝ ║
+║    ██║   ██║██║██║        ██║   ██║   ██║██████╔╝ ╚████╔╝  ║
+║    ╚██╗ ██╔╝██║██║        ██║   ██║   ██║██╔══██╗  ╚██╔╝   ║
+║     ╚████╔╝ ██║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║    ║
+║      ╚═══╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝    ║
 ║                                                            ║`
 		sb.WriteString(VictoryStyle.Render(victory))
 		sb.WriteString("\n")
 
 		if m.sessionResult != nil && m.sessionResult.TotalRounds == 1 {
-			sb.WriteString(VictoryStyle.Render("║                   FLAWLESS VICTORY!                       ║"))
+			sb.WriteString(VictoryStyle.Render("║                    FLAWLESS VICTORY!                      ║"))
 		} else {
-			sb.WriteString(VictoryStyle.Render("║                      YOU WIN!                              ║"))
+			sb.WriteString(VictoryStyle.Render("║                        YOU WIN!                           ║"))
 		}
 		sb.WriteString("\n")
 	} else {
@@ -494,35 +563,44 @@ func (m Model) viewResults() string {
 ║                                                            ║`
 		sb.WriteString(DefeatStyle.Render(defeat))
 		sb.WriteString("\n")
-		sb.WriteString(DefeatStyle.Render("║                   SESSION ABORTED                          ║"))
+		sb.WriteString(DefeatStyle.Render("║                    SESSION ABORTED                         ║"))
 		sb.WriteString("\n")
 	}
 
 	sb.WriteString("╠════════════════════════════════════════════════════════════╣\n")
 
-	// Stats
+	// Stats - use fixed width formatting
 	if m.sessionResult != nil {
-		statsLine := fmt.Sprintf("║  Rounds: %-3d │  Duration: %-10s │  Files: %-3d        ║",
-			m.sessionResult.TotalRounds,
-			m.sessionResult.TotalDuration.Round(time.Second),
-			len(m.sessionResult.FilesModified))
-		sb.WriteString(statsLine)
-		sb.WriteString("\n")
+		rounds := fmt.Sprintf("Rounds: %d", m.sessionResult.TotalRounds)
+		duration := fmt.Sprintf("Duration: %s", m.sessionResult.TotalDuration.Round(time.Second))
+		files := fmt.Sprintf("Files: %d", len(m.sessionResult.FilesModified))
+		statsContent := fmt.Sprintf("  %-12s  │  %-16s  │  %-10s  ", rounds, duration, files)
+		// Pad to exactly boxW
+		for len(statsContent) < boxW {
+			statsContent += " "
+		}
+		sb.WriteString("║" + statsContent + "║\n")
 	}
 
 	// Error message if any
 	if m.sessionError != nil {
 		sb.WriteString("╠════════════════════════════════════════════════════════════╣\n")
-		errLine := fmt.Sprintf("║  Error: %-50s ║", truncateString(m.sessionError.Error(), 50))
-		sb.WriteString(ErrorStyle.Render(errLine))
+		errText := "  Error: " + truncateString(m.sessionError.Error(), boxW-12)
+		for len(errText) < boxW {
+			errText += " "
+		}
+		sb.WriteString(ErrorStyle.Render("║" + errText + "║"))
 		sb.WriteString("\n")
 	}
 
 	// Report path
 	if m.reportPath != "" {
 		sb.WriteString("╠════════════════════════════════════════════════════════════╣\n")
-		reportLine := fmt.Sprintf("║  Report: %-49s ║", truncateString(m.reportPath, 49))
-		sb.WriteString(InfoStyle.Render(reportLine))
+		reportText := "  Report: " + truncateString(m.reportPath, boxW-12)
+		for len(reportText) < boxW {
+			reportText += " "
+		}
+		sb.WriteString(InfoStyle.Render("║" + reportText + "║"))
 		sb.WriteString("\n")
 	}
 
@@ -563,4 +641,106 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// Fighter sprite frames - idle stance for left fighter (facing right)
+var leftIdleFrames = [][]string{
+	{
+		"   .O.   ",
+		"  --|--  ",
+		"   /|    ",
+		"  | |    ",
+		"  d b    ",
+	},
+	{
+		"   .O.   ",
+		"  --|--  ",
+		"   /|    ",
+		"  / \\    ",
+		" d   b   ",
+	},
+}
+
+// Fighter sprite frames - attack stance for left fighter
+var leftAttackFrames = [][]string{
+	{
+		"   .O.   ",
+		"  --|==> ",
+		"   /|    ",
+		"  | |    ",
+		"  d b    ",
+	},
+	{
+		"   .O_   ",
+		"  --|===>",
+		"   /|    ",
+		"  | |    ",
+		"  d b    ",
+	},
+	{
+		"   .O)   ",
+		"  --X===>",
+		"   /|    ",
+		"  | |    ",
+		"  d b    ",
+	},
+}
+
+// Fighter sprite frames - idle stance for right fighter (facing left)
+var rightIdleFrames = [][]string{
+	{
+		"   .O.   ",
+		"  --|--  ",
+		"    |\\   ",
+		"    | |  ",
+		"    d b  ",
+	},
+	{
+		"   .O.   ",
+		"  --|--  ",
+		"    |\\   ",
+		"    / \\  ",
+		"   d   b ",
+	},
+}
+
+// Fighter sprite frames - attack stance for right fighter
+var rightAttackFrames = [][]string{
+	{
+		"   .O.   ",
+		" <==|--  ",
+		"    |\\   ",
+		"    | |  ",
+		"    d b  ",
+	},
+	{
+		"   _O.   ",
+		"<===|--  ",
+		"    |\\   ",
+		"    | |  ",
+		"    d b  ",
+	},
+	{
+		"   (O.   ",
+		"<===X--  ",
+		"    |\\   ",
+		"    | |  ",
+		"    d b  ",
+	},
+}
+
+// getLeftFighterFrames returns the appropriate frames for the left fighter based on state
+func (m Model) getLeftFighterFrames() [][]string {
+	if m.leftAttacking {
+		return leftAttackFrames
+	}
+	return leftIdleFrames
+}
+
+// getRightFighterFrames returns the appropriate frames for the right fighter based on state
+func (m Model) getRightFighterFrames() [][]string {
+	if m.rightAttacking {
+		return rightAttackFrames
+	}
+	return rightIdleFrames
 }
