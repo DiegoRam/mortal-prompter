@@ -1,8 +1,4 @@
-# Mortal Prompter
-
 <img width="591" height="291" alt="image" src="https://github.com/user-attachments/assets/d7269d78-eef3-45c0-94c1-83c4903cfd89" />
-
-
 
 > *"FINISH HIM!"* - When your code finally passes code review
 
